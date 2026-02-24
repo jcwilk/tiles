@@ -1,6 +1,6 @@
 ---
 id: til-nahm
-status: open
+status: closed
 deps: [til-yasw]
 links: [til-wfke, til-yasw, til-l24d, til-joj6, til-442l, til-ihbz, til-hxs3, til-a8g5]
 created: 2026-02-24T06:57:07Z
