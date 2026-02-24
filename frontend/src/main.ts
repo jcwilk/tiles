@@ -72,6 +72,17 @@ function makeMergeHandler(currentTiles: TileElement[]) {
         onMergeRequest: makeMergeHandler(currentTiles),
       });
 
+      // Immediate visual feedback: animate lines from source and target to merge point
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          playMergeConnectionAnimation(
+            source.element,
+            target.element,
+            loadingTile
+          );
+        });
+      });
+
       const result = await performMerge(source.shader, target.shader, store);
 
       if (result.success && result.shader) {
@@ -108,16 +119,6 @@ function makeMergeHandler(currentTiles: TileElement[]) {
             ...currentTiles.slice(targetIdx + 1),
           ];
           tiles = updatedTiles;
-
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              playMergeConnectionAnimation(
-                source.element,
-                target.element,
-                newTile.element
-              );
-            });
-          });
         }
 
         teardownDragDrop?.();
