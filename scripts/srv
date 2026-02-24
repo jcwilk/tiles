@@ -94,7 +94,9 @@ cmd_status_remote() {
   echo "=== Remote status ==="
   local frontend_ok=0 worker_ok=0
   if [[ -n "$SRV_REMOTE_FRONTEND_URL" ]]; then
-    check_url "$SRV_REMOTE_FRONTEND_URL" "frontend ($SRV_REMOTE_FRONTEND_URL)" || frontend_ok=1
+    local frontend_url="$SRV_REMOTE_FRONTEND_URL"
+    [[ "$frontend_url" != *"/" ]] && frontend_url="$frontend_url/"
+    check_url "$frontend_url" "frontend ($SRV_REMOTE_FRONTEND_URL)" || frontend_ok=1
   else
     echo "  frontend: (not configured)"
   fi
