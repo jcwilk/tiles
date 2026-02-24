@@ -89,6 +89,7 @@ Pushes to `master` trigger automatic deployment via `.github/workflows/deploy.ym
 2. **Secrets** (Settings → Secrets and variables → Actions):
    - `CLOUDFLARE_API_TOKEN` — Cloudflare API token with Workers edit permission
    - `CLOUDFLARE_ACCOUNT_ID` — Your Cloudflare account ID
+   - `CLOUDFLARE_RATE_LIMIT_KV_ID` — KV namespace ID for rate limiting. Run `npx wrangler kv namespace create RATE_LIMIT_KV` in `worker/` and add the returned `id` as a secret.
    - `VITE_API_URL` — Deployed worker URL (e.g. `https://tiles-worker.<subdomain>.workers.dev`). Deploy the worker once manually to obtain this, then add it as a secret for subsequent runs.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system architecture.

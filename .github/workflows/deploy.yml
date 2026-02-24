@@ -70,6 +70,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate worker deploy secrets
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_RATE_LIMIT_KV_ID }}" ]; then
+            echo "::error::CLOUDFLARE_RATE_LIMIT_KV_ID secret is required. Run 'npx wrangler kv namespace create RATE_LIMIT_KV' in worker/ and add the returned id as a repo secret."
+            exit 1
+          fi
+
+      - name: Configure KV namespace for deploy
+        working-directory: worker
+        env:
+          KV_ID: ${{ secrets.CLOUDFLARE_RATE_LIMIT_KV_ID }}
+        run: |
+          sed -i "s/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/$KV_ID/g" wrangler.toml
+
       - name: Deploy worker to Cloudflare
         working-directory: worker
         env:
