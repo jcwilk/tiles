@@ -10,6 +10,7 @@ import { setupTileDragDrop } from "./drag-drop.js";
 import { performMerge } from "./merge.js";
 import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
 import { performAddFromVoice } from "./add-from-voice.js";
+import { isBuiltInTile } from "./builtin.js";
 import type { ShaderObject } from "./types.js";
 
 const appEl = document.getElementById("app");
@@ -23,6 +24,8 @@ let teardownDragDrop: (() => void) | null = null;
 let storage: ShaderStorage | null = null;
 
 async function removeTile(tile: TileElement): Promise<void> {
+  if (isBuiltInTile(tile.shader.id)) return;
+
   const store = storage;
   if (!store) return;
 
@@ -149,9 +152,7 @@ function renderGrid(shaders: ShaderObject[]): void {
   grid.className = "tiles-grid";
 
   tiles = shaders.map((shader) => {
-    const tile = createTile(shader, {
-      onDelete: () => removeTile(tile),
-    });
+    const tile = createTile(shader, isBuiltInTile(shader.id) ? {} : { onDelete: () => removeTile(tile) });
     grid.appendChild(tile.element);
 
     tile.element.addEventListener("click", () => openFullscreen(tile));

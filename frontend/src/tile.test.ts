@@ -41,6 +41,16 @@ describe("createTile", () => {
     (btn as HTMLButtonElement).click();
     expect(onDelete).toHaveBeenCalledOnce();
   });
+
+  it("omits delete button when onDelete is not provided (built-in tiles)", () => {
+    const builtInShader: ShaderObject = {
+      ...PLACEHOLDER_SHADER,
+      id: "seed-0-123",
+    };
+    const tile = createTile(builtInShader);
+    const btn = tile.element.querySelector(".tile-delete");
+    expect(btn).toBeNull();
+  });
 });
 
 describe("createLoadingTile", () => {
