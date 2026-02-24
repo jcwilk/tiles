@@ -20,6 +20,9 @@ export function setupTileDragDrop(
   let isDragging = false;
   let suppressNextClick = false;
   let currentTargetId: string | null = null;
+  let dragPreview: HTMLElement | null = null;
+  let grabOffsetX = 0;
+  let grabOffsetY = 0;
 
   function getTileId(el: HTMLElement): string | null {
     return el.closest(".tile")?.getAttribute("data-shader-id") ?? null;
@@ -28,6 +31,40 @@ export function setupTileDragDrop(
   function findTileAt(x: number, y: number): HTMLElement | null {
     const el = document.elementFromPoint(x, y);
     return el?.closest(".tile") ?? null;
+  }
+
+  function createDragPreview(): void {
+    if (!sourceTile) return;
+    const rect = sourceTile.getBoundingClientRect();
+    grabOffsetX = startX - rect.left;
+    grabOffsetY = startY - rect.top;
+
+    const preview = sourceTile.cloneNode(true) as HTMLElement;
+    preview.className = `${preview.className} tile-drag-preview`.trim();
+    preview.style.position = "fixed";
+    preview.style.left = `${startX - grabOffsetX}px`;
+    preview.style.top = `${startY - grabOffsetY}px`;
+    preview.style.width = `${rect.width}px`;
+    preview.style.height = `${rect.height}px`;
+    preview.style.pointerEvents = "none";
+    preview.style.zIndex = "9999";
+    document.body.appendChild(preview);
+    dragPreview = preview;
+
+    sourceTile.classList.add("tile-dragging");
+  }
+
+  function updateDragPreview(clientX: number, clientY: number): void {
+    if (dragPreview) {
+      dragPreview.style.left = `${clientX - grabOffsetX}px`;
+      dragPreview.style.top = `${clientY - grabOffsetY}px`;
+    }
+  }
+
+  function removeDragPreview(): void {
+    dragPreview?.remove();
+    dragPreview = null;
+    sourceTile?.classList.remove("tile-dragging");
   }
 
   function setDropTarget(target: HTMLElement | null): void {
@@ -66,10 +103,12 @@ export function setupTileDragDrop(
       const dy = e.clientY - startY;
       if (dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
         isDragging = true;
+        createDragPreview();
       }
     }
 
     if (isDragging) {
+      updateDragPreview(e.clientX, e.clientY);
       const target = findTileAt(e.clientX, e.clientY);
       if (target && getTileId(target) !== sourceId) {
         setDropTarget(target);
@@ -91,6 +130,7 @@ export function setupTileDragDrop(
       }
       setDropTarget(null);
       suppressNextClick = true;
+      removeDragPreview();
     }
 
     sourceTile?.releasePointerCapture?.(e.pointerId);
@@ -119,6 +159,7 @@ export function setupTileDragDrop(
   grid.addEventListener("click", handleClick, { capture: true });
 
   return () => {
+    removeDragPreview();
     grid.removeEventListener("pointerdown", handlePointerDown, { capture: true });
     grid.removeEventListener("pointermove", handlePointerMove, { capture: true });
     grid.removeEventListener("pointerup", handlePointerUp, { capture: true });

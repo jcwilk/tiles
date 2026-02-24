@@ -68,6 +68,16 @@ body {
   outline-offset: -3px;
 }
 
+.tile-dragging {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.tile-drag-preview {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transform-origin: top left;
+}
+
 .tile canvas {
   display: block;
   width: 100%;

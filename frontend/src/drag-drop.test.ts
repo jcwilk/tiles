@@ -31,4 +31,57 @@ describe("setupTileDragDrop", () => {
     setupTileDragDrop([tile1], { onMergeRequest });
     expect(onMergeRequest).not.toHaveBeenCalled();
   });
+
+  it("creates and removes drag preview during drag sequence", () => {
+    const tile1 = document.createElement("div");
+    tile1.className = "tile";
+    tile1.dataset.shaderId = "a";
+    const grid = document.createElement("div");
+    grid.appendChild(tile1);
+    document.body.appendChild(grid);
+
+    const teardown = setupTileDragDrop([tile1], { onMergeRequest: vi.fn() });
+
+    const rect = tile1.getBoundingClientRect();
+    const startX = rect.left + rect.width / 2;
+    const startY = rect.top + rect.height / 2;
+
+    tile1.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        clientX: startX,
+        clientY: startY,
+        button: 0,
+        pointerId: 1,
+        bubbles: true,
+      })
+    );
+
+    tile1.dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: startX + 20,
+        clientY: startY + 20,
+        button: 0,
+        pointerId: 1,
+        bubbles: true,
+      })
+    );
+
+    const preview = document.body.querySelector(".tile-drag-preview");
+    expect(preview).toBeTruthy();
+
+    tile1.dispatchEvent(
+      new PointerEvent("pointerup", {
+        clientX: startX + 20,
+        clientY: startY + 20,
+        button: 0,
+        pointerId: 1,
+        bubbles: true,
+      })
+    );
+
+    expect(document.body.querySelector(".tile-drag-preview")).toBeNull();
+
+    teardown();
+    document.body.removeChild(grid);
+  });
 });
