@@ -1,6 +1,6 @@
 ---
 id: til-lkkz
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-24T10:02:43Z

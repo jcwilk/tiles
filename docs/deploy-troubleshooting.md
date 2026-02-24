@@ -20,6 +20,8 @@ The deploy workflow (`.github/workflows/deploy.yml`) injects `CLOUDFLARE_RATE_LI
 
 The `ALERT_EMAIL` binding requires [Email Routing](https://developers.cloudflare.com/email-routing/get-started/) enabled and at least one verified destination address. If not configured, deploy may fail.
 
+**Fix**: The binding is commented out in `worker/wrangler.toml` by default so deploys succeed without Email Routing. To enable rate-limit alerts, uncomment the `[[send_email]]` block and configure Email Routing in your Cloudflare account.
+
 ### 4. Other known issues
 
 - **Stale API token**: Create a new token at Cloudflare Dashboard if the build token was deleted or rolled.

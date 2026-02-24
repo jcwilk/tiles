@@ -1,6 +1,6 @@
 ---
 id: til-2z9p
-status: open
+status: closed
 deps: [til-4d0s]
 links: []
 created: 2026-02-24T10:02:47Z

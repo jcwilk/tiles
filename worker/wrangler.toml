@@ -23,6 +23,8 @@ binding = "RATE_LIMIT_KV"
 id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 preview_id = "c89b80a40a204479835125e0ee9518e9"
 
-# Email binding for rate limit threshold alerts
-[[send_email]]
-name = "ALERT_EMAIL"
+# Email binding for rate limit threshold alerts (optional)
+# Requires Email Routing enabled and a verified destination. If deploy fails, remove this block.
+# See docs/deploy-troubleshooting.md. Worker handles missing ALERT_EMAIL gracefully.
+# [[send_email]]
+# name = "ALERT_EMAIL"
