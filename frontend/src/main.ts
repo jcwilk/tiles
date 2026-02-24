@@ -8,6 +8,7 @@ import { seedIfEmpty } from "./seed.js";
 import { createTile, createLoadingTile, disposeTile, type TileElement } from "./tile.js";
 import { setupTileDragDrop } from "./drag-drop.js";
 import { performMerge } from "./merge.js";
+import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
 import type { ShaderObject } from "./types.js";
 
 const appEl = document.getElementById("app");
@@ -90,6 +91,16 @@ function renderGrid(shaders: ShaderObject[]): void {
         const allEls = Array.from(grid.querySelectorAll(".tile"));
         teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
           onMergeRequest: makeMergeHandler(updatedTiles),
+        });
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            playMergeConnectionAnimation(
+              source.element,
+              target.element,
+              newTile.element
+            );
+          });
         });
       } else {
         teardownDragDrop?.();
