@@ -1,6 +1,6 @@
 ---
 description: Global project rules and entry point for all agent instructions.
-globs:
+globs: 
 alwaysApply: true
 ---
 

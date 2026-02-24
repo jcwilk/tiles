@@ -19,8 +19,8 @@ crons = ["*/15 * * * *"]
 # Preview (dev): npx wrangler kv:namespace create RATE_LIMIT_KV --preview
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-preview_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+id = "1c494aa12fca44cd858e4fa2d443ca6d"
+preview_id = "c89b80a40a204479835125e0ee9518e9"
 
 # Email binding for rate limit threshold alerts
 [[send_email]]
