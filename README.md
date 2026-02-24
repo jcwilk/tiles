@@ -58,6 +58,17 @@ npm run build
 - `frontend/` — Vite + TypeScript web app (GitHub Pages)
 - `worker/` — Cloudflare Worker AI proxy (Wrangler)
 
+### Worker Deployment
+
+Before deploying the worker to Cloudflare, create a KV namespace for rate limiting:
+
+```bash
+cd worker
+npx wrangler kv:namespace create RATE_LIMIT_KV
+```
+
+Update `worker/wrangler.toml` with the returned namespace `id`. For local dev, the worker uses simulated KV.
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system architecture.
 
 ## Contributing
