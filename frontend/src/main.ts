@@ -24,7 +24,7 @@ let teardownDragDrop: (() => void) | null = null;
 let storage: ShaderStorage | null = null;
 
 async function removeTile(tile: TileElement): Promise<void> {
-  if (isBuiltInTile(tile.shader.id)) return;
+  if (isBuiltInTile(tile.shader)) return;
 
   const store = storage;
   if (!store) return;
@@ -152,7 +152,7 @@ function renderGrid(shaders: ShaderObject[]): void {
   grid.className = "tiles-grid";
 
   tiles = shaders.map((shader) => {
-    const tile = createTile(shader, isBuiltInTile(shader.id) ? {} : { onDelete: () => removeTile(tile) });
+    const tile = createTile(shader, isBuiltInTile(shader) ? {} : { onDelete: () => removeTile(tile) });
     grid.appendChild(tile.element);
 
     tile.element.addEventListener("click", () => openFullscreen(tile));

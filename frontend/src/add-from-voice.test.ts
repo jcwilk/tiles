@@ -143,13 +143,13 @@ describe("processAudioBlob", () => {
       get ondataavailable() {
         return ondataavailable;
       },
-      set ondataavailable(fn: (e: { data: Blob }) => void) {
+      set ondataavailable(fn: ((e: { data: Blob }) => void) | null) {
         ondataavailable = fn;
       },
       get onstop() {
         return onstop;
       },
-      set onstop(fn: () => void) {
+      set onstop(fn: (() => void) | null) {
         onstop = fn;
       },
       onerror: null as (() => void) | null,

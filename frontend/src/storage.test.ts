@@ -54,7 +54,7 @@ describe("seedIfEmpty", () => {
     expect(all).toHaveLength(6);
   });
 
-  it("does not seed when storage has shaders and returns false", async () => {
+  it("does not seed when storage has shaders but adds missing default seeds", async () => {
     const storage = createInMemoryStorage();
     await storage.add({
       id: "existing",
@@ -66,7 +66,22 @@ describe("seedIfEmpty", () => {
     const seeded = await seedIfEmpty(storage);
     expect(seeded).toBe(false);
     const all = await storage.getAll();
-    expect(all).toHaveLength(1);
+    expect(all).toHaveLength(7);
+    expect(all.some((s) => s.id === "existing")).toBe(true);
+  });
+
+  it("picks up new default shaders when storage has existing seeds", async () => {
+    const storage = createInMemoryStorage();
+    const seeds = createSeedShaders();
+    for (let i = 0; i < 5; i++) {
+      await storage.add(seeds[i]);
+    }
+    const seeded = await seedIfEmpty(storage);
+    expect(seeded).toBe(false);
+    const all = await storage.getAll();
+    expect(all).toHaveLength(6);
+    const names = all.map((s) => s.name).sort();
+    expect(names).toEqual(["Circles", "Gradient", "Noise", "Plasma", "Rainbow", "Stripes"]);
   });
 });
 

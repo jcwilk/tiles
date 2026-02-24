@@ -1,7 +1,12 @@
 /**
  * Built-in tile detection.
- * Seed shaders (IDs matching seed-*) are the six original tiles and cannot be deleted.
+ * A shader is builtin only if it was originally a seed (id starts with seed-)
+ * AND its name still exists in the current default seed definitions.
+ * Obsolete seeds (removed from SEED_SHADERS) become deletable.
  */
-export function isBuiltInTile(id: string): boolean {
-  return id.startsWith("seed-");
+import { SEED_SHADERS } from "./seed-shaders.js";
+
+export function isBuiltInTile(shader: { id: string; name: string }): boolean {
+  if (!shader.id.startsWith("seed-")) return false;
+  return SEED_SHADERS.some((s) => s.name === shader.name);
 }
