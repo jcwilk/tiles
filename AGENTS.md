@@ -9,7 +9,7 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
     - Start a task with `./tk start <id>`.
     - Create new tickets for sub-tasks or bugs discovered.
     - Close tasks with `./tk close <id>` only after verification.
-    - **Note**: `./tk list` shows all tickets; `./tk ready` shows only unblocked ones.
+    - **Note**: `./tk ready` shows unblocked tasks; `./tk blocked` shows blocked ones; `./tk closed` shows recently closed.
 2.  **Documentation First**: Before making significant changes, consult `ARCHITECTURE.md` and `CONVENTIONS.md` in the project root.
     - For domain-specific knowledge, see `docs/README.md`.
     - Respect the "gardened" nature of the documentation.
@@ -20,7 +20,7 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
 
 ## Workflow
 
-1.  **Work Next**: When picking up new work or triggered via `/work-next`:
+1.  **Work Next**: When picking up new work or triggered via `/work-next` or `/work-all`:
     - Run `./tk ready` to identify the highest priority available task.
     - Run `./tk start <id>` to mark the ticket as in-progress.
     - Run `./tk show <id>` to orient yourself to the requirements and design.
@@ -37,9 +37,11 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
 - `./tk help`: Show ticket system help.
 - `./tk ready`: Show tasks ready to be worked on.
 - `./tk show <id>`: Show details of a specific ticket.
+- `/work-all`: Process all ready tickets sequentially (spawns subagent per ticket; verifies close, commit, push).
+- `/file-tickets`: Break the conversation's conclusion into tickets under a new epic (mind dependencies).
 - `npm run dev`: Run local Vite server and Wrangler worker proxy (frontend + worker).
 - `npm test`: Run full-stack test suite (Vitest in frontend and worker).
 
 ---
 
-*Last Updated: 2026-02-23*
+*Last Updated: 2026-02-24*
