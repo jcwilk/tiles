@@ -137,6 +137,39 @@ describe("worker", () => {
       expect(env.AI.run).toHaveBeenCalled();
     });
 
+    it("accepts optional previousError for retry context", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/generate", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentA: "void main(){}",
+          fragmentB: "void main(){}",
+          previousError: "Fragment: syntax error at line 5",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { fragmentSource: string };
+      expect(body.fragmentSource).toBe("[VALID CODE]");
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: "user",
+              content: expect.stringContaining("syntax error at line 5"),
+            }),
+          ]),
+        })
+      );
+    });
+
     it("honors ALLOWED_ORIGINS env override", async () => {
       const env = createEnv({ ALLOWED_ORIGINS: "https://custom.example.com" });
       const req = new Request("http://localhost/generate", {

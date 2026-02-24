@@ -3,10 +3,11 @@
  * Entry point for the frontend.
  */
 import "./styles.css";
-import { createIndexedDBStorage } from "./storage.js";
+import { createIndexedDBStorage, type ShaderStorage } from "./storage.js";
 import { seedIfEmpty } from "./seed.js";
 import { createTile, disposeTile, type TileElement } from "./tile.js";
 import { setupTileDragDrop } from "./drag-drop.js";
+import { performMerge } from "./merge.js";
 import type { ShaderObject } from "./types.js";
 
 const appEl = document.getElementById("app");
@@ -17,6 +18,7 @@ let tiles: TileElement[] = [];
 let fullscreenOverlay: HTMLElement | null = null;
 let fullscreenTile: TileElement | null = null;
 let teardownDragDrop: (() => void) | null = null;
+let storage: ShaderStorage | null = null;
 
 function renderGrid(shaders: ShaderObject[]): void {
   teardownDragDrop?.();
@@ -35,12 +37,21 @@ function renderGrid(shaders: ShaderObject[]): void {
   app.innerHTML = "";
   app.appendChild(grid);
 
+  const store = storage;
   teardownDragDrop = setupTileDragDrop(
     tiles.map((t) => t.element),
     {
-      onMergeRequest(sourceId, targetId) {
-        // AI merge integration in til-bybc
-        console.log("Merge requested:", sourceId, "->", targetId);
+      async onMergeRequest(sourceId, targetId) {
+        if (!store) return;
+        const source = tiles.find((t) => t.shader.id === sourceId);
+        const target = tiles.find((t) => t.shader.id === targetId);
+        if (!source || !target) return;
+
+        const result = await performMerge(source.shader, target.shader, store);
+        if (result.success && result.shader) {
+          const shaders = await store.getAll();
+          renderGrid(shaders);
+        }
       },
     }
   );
@@ -90,7 +101,7 @@ function handlePopState(): void {
 }
 
 async function init(): Promise<void> {
-  const storage = createIndexedDBStorage();
+  storage = createIndexedDBStorage();
   await seedIfEmpty(storage);
   const shaders = await storage.getAll();
 

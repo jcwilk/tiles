@@ -80,6 +80,8 @@ function handleCorsPreflight(corsHeaders: Record<string, string>): Response {
 interface GenerateBody {
   fragmentA: string;
   fragmentB: string;
+  /** Optional: compiler error from previous attempt for retry context */
+  previousError?: string;
 }
 
 async function handleGenerate(
@@ -99,7 +101,7 @@ async function handleGenerate(
     return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
   }
 
-  const { fragmentA, fragmentB } = body;
+  const { fragmentA, fragmentB, previousError } = body;
   if (typeof fragmentA !== "string" || typeof fragmentB !== "string") {
     return jsonResponse(
       { error: "Missing or invalid fragmentA/fragmentB (must be strings)" },
@@ -127,7 +129,7 @@ async function handleGenerate(
     );
   }
 
-  const prompt = buildMergePrompt(fragmentA, fragmentB);
+  const prompt = buildMergePrompt(fragmentA, fragmentB, typeof previousError === "string" ? previousError : undefined);
 
   try {
     const response = await env.AI.run(MODEL, {
@@ -166,8 +168,8 @@ async function handleGenerate(
   }
 }
 
-function buildMergePrompt(fragmentA: string, fragmentB: string): string {
-  return `Merge these two GLSL fragment shaders into one new shader that creatively combines their visual effects. Output ONLY the new fragment shader code, no explanations.
+function buildMergePrompt(fragmentA: string, fragmentB: string, previousError?: string): string {
+  let base = `Merge these two GLSL fragment shaders into one new shader that creatively combines their visual effects. Output ONLY the new fragment shader code, no explanations.
 
 Shader A:
 \`\`\`glsl
@@ -178,8 +180,12 @@ Shader B:
 \`\`\`glsl
 ${fragmentB}
 \`\`\`
-
-Output the merged fragment shader:`;
+`;
+  if (previousError) {
+    base += `\nThe previous attempt failed to compile with this error. Fix it and output corrected GLSL:\n\`\`\`\n${previousError}\n\`\`\`\n\n`;
+  }
+  base += `Output the merged fragment shader:`;
+  return base;
 }
 
 function estimateTokens(text: string): number {
