@@ -84,3 +84,20 @@ export function disposeTile(tile: TileElement): void {
   }
   tile.engine?.dispose();
 }
+
+/** Placeholder tile shown while a merge is in progress. */
+export function createLoadingTile(): HTMLElement {
+  const tile = document.createElement("div");
+  tile.className = "tile tile-loading";
+  tile.dataset.shaderId = "loading";
+
+  const spinner = document.createElement("div");
+  spinner.className = "tile-loading-spinner";
+  const label = document.createElement("span");
+  label.className = "tile-label";
+  label.textContent = "Merging…";
+
+  tile.appendChild(spinner);
+  tile.appendChild(label);
+  return tile;
+}

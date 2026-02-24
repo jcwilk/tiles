@@ -30,7 +30,9 @@ export function setupTileDragDrop(
 
   function findTileAt(x: number, y: number): HTMLElement | null {
     const el = document.elementFromPoint(x, y);
-    return el?.closest(".tile") ?? null;
+    const tile = el?.closest(".tile") ?? null;
+    if (!tile || (tile as HTMLElement).classList.contains("tile-loading")) return null;
+    return tile as HTMLElement;
   }
 
   function createDragPreview(): void {
@@ -70,7 +72,7 @@ export function setupTileDragDrop(
   function setDropTarget(target: HTMLElement | null): void {
     tileElements.forEach((el) => {
       const id = el.getAttribute("data-shader-id");
-      if (id === sourceId) return;
+      if (id === sourceId || id === "loading") return;
       el.classList.toggle("tile-drop-target", el === target);
     });
     const newTargetId = target ? getTileId(target) : null;
