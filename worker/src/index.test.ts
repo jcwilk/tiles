@@ -137,6 +137,27 @@ describe("worker", () => {
       expect(env.AI.run).toHaveBeenCalled();
     });
 
+    it("returns [INVALID CODE] when mock AI is configured for invalid output", async () => {
+      const mockAI = createMockAI("[INVALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/generate", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentA: "void main(){}",
+          fragmentB: "void main(){}",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { fragmentSource: string };
+      expect(body.fragmentSource).toBe("[INVALID CODE]");
+    });
+
     it("accepts optional previousError for retry context", async () => {
       const mockAI = createMockAI("[VALID CODE]");
       const env = createEnv({ AI: mockAI });

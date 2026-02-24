@@ -6,6 +6,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { performMerge } from "./merge.js";
 import { createInMemoryStorage } from "./storage.js";
+import {
+  createMockFetchHarness,
+  VALID_CODE,
+  INVALID_CODE,
+} from "./test-harness.js";
 import type { ShaderObject } from "./types.js";
 
 const MOCK_SHADER: ShaderObject = {
@@ -35,17 +40,14 @@ describe("performMerge", () => {
   });
 
   it("saves to storage and returns success when API returns [VALID CODE]", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ fragmentSource: "[VALID CODE]" }),
-    });
+    globalThis.fetch = createMockFetchHarness({ response: VALID_CODE });
 
     const storage = createInMemoryStorage();
     const result = await performMerge(MOCK_SHADER, MOCK_SHADER_B, storage);
 
     expect(result.success).toBe(true);
     expect(result.shader).toBeDefined();
-    expect(result.shader!.fragmentSource).toBe("[VALID CODE]");
+    expect(result.shader!.fragmentSource).toBe(VALID_CODE);
     expect(result.shader!.name).toContain("Merge");
     expect(result.shader!.id).toBeDefined();
 
@@ -55,10 +57,7 @@ describe("performMerge", () => {
   });
 
   it("retries up to 3 times when API returns [INVALID CODE], then shows toast", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ fragmentSource: "[INVALID CODE]" }),
-    });
+    globalThis.fetch = createMockFetchHarness({ response: INVALID_CODE });
 
     const storage = createInMemoryStorage();
     const result = await performMerge(MOCK_SHADER, MOCK_SHADER_B, storage);
@@ -76,29 +75,9 @@ describe("performMerge", () => {
     expect(all).toHaveLength(0);
   });
 
-  it("passes previousError to API on retry", async () => {
-    let callCount = 0;
-    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
-      callCount++;
-      const body = init?.body ? JSON.parse(init.body as string) : {};
-      if (callCount === 1) {
-        expect(body.previousError).toBeUndefined();
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ fragmentSource: "[INVALID CODE]" }),
-        });
-      }
-      if (callCount === 2) {
-        expect(body.previousError).toBe("[INVALID CODE]");
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ fragmentSource: "[VALID CODE]" }),
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ fragmentSource: "[INVALID CODE]" }),
-      });
+  it("passes previousError to API on retry and succeeds on second attempt", async () => {
+    globalThis.fetch = createMockFetchHarness({
+      responses: [INVALID_CODE, VALID_CODE],
     });
 
     const storage = createInMemoryStorage();
@@ -107,6 +86,12 @@ describe("performMerge", () => {
     expect(result.success).toBe(true);
     expect(result.shader).toBeDefined();
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+
+    const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const firstBody = JSON.parse((calls[0][1] as RequestInit).body as string);
+    const secondBody = JSON.parse((calls[1][1] as RequestInit).body as string);
+    expect(firstBody.previousError).toBeUndefined();
+    expect(secondBody.previousError).toBe(INVALID_CODE);
   });
 
   it("shows toast and returns failure when API returns error", async () => {
@@ -124,5 +109,41 @@ describe("performMerge", () => {
 
     const { showToast } = await import("./toast.js");
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining("Rate limit"));
+  });
+
+  it("saved shader has correct structure and state", async () => {
+    globalThis.fetch = createMockFetchHarness({ response: VALID_CODE });
+
+    const storage = createInMemoryStorage();
+    const result = await performMerge(MOCK_SHADER, MOCK_SHADER_B, storage);
+
+    expect(result.success).toBe(true);
+    const shader = result.shader!;
+    expect(shader.id).toBeDefined();
+    expect(typeof shader.id).toBe("string");
+    expect(shader.name).toContain("Merge");
+    expect(shader.name).toContain("A");
+    expect(shader.name).toContain("B");
+    expect(shader.vertexSource).toContain("a_position");
+    expect(shader.fragmentSource).toBe(VALID_CODE);
+    expect(typeof shader.createdAt).toBe("number");
+    expect(shader.createdAt).toBeGreaterThan(0);
+
+    const all = await storage.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0]).toEqual(shader);
+  });
+
+  it("does not save to storage when all retries fail", async () => {
+    globalThis.fetch = createMockFetchHarness({ response: INVALID_CODE });
+
+    const storage = createInMemoryStorage();
+    await storage.add(MOCK_SHADER);
+    await storage.add(MOCK_SHADER_B);
+    const result = await performMerge(MOCK_SHADER, MOCK_SHADER_B, storage);
+
+    expect(result.success).toBe(false);
+    const all = await storage.getAll();
+    expect(all).toHaveLength(2);
   });
 });
