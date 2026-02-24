@@ -21,27 +21,30 @@ let fullscreenTile: TileElement | null = null;
 let teardownDragDrop: (() => void) | null = null;
 let storage: ShaderStorage | null = null;
 
-function renderGrid(shaders: ShaderObject[]): void {
-  teardownDragDrop?.();
-
-  const grid = document.createElement("div");
-  grid.className = "tiles-grid";
-
-  tiles = shaders.map((shader) => {
-    const tile = createTile(shader);
-    grid.appendChild(tile.element);
-
-    tile.element.addEventListener("click", () => openFullscreen(tile));
-    return tile;
-  });
-
-  app.innerHTML = "";
-  app.appendChild(grid);
-
+async function removeTile(tile: TileElement): Promise<void> {
   const store = storage;
-  function makeMergeHandler(currentTiles: TileElement[]) {
-    return async (sourceId: string, targetId: string) => {
-      if (!store || sourceId === "loading" || targetId === "loading") return;
+  if (!store) return;
+
+  const grid = tile.element.parentElement;
+  if (!grid) return;
+
+  disposeTile(tile);
+  tile.element.remove();
+
+  await store.delete(tile.shader.id);
+  tiles = tiles.filter((t) => t.shader.id !== tile.shader.id);
+
+  teardownDragDrop?.();
+  const remaining = Array.from(grid.querySelectorAll(".tile"));
+  teardownDragDrop = setupTileDragDrop(remaining as HTMLElement[], {
+    onMergeRequest: makeMergeHandler(tiles),
+  });
+}
+
+function makeMergeHandler(currentTiles: TileElement[]) {
+  const store = storage;
+  return async (sourceId: string, targetId: string) => {
+    if (!store || sourceId === "loading" || targetId === "loading") return;
       const source = currentTiles.find((t) => t.shader.id === sourceId);
       const target = currentTiles.find((t) => t.shader.id === targetId);
       if (!source || !target) return;
@@ -72,7 +75,9 @@ function renderGrid(shaders: ShaderObject[]): void {
       const result = await performMerge(source.shader, target.shader, store);
 
       if (result.success && result.shader) {
-        const newTile = createTile(result.shader);
+        const newTile = createTile(result.shader, {
+          onDelete: () => removeTile(newTile),
+        });
         newTile.element.classList.add("tile-merge-appear");
         newTile.element.addEventListener("click", () => openFullscreen(newTile));
 
@@ -133,7 +138,26 @@ function renderGrid(shaders: ShaderObject[]): void {
         });
       }
     };
-  }
+}
+
+function renderGrid(shaders: ShaderObject[]): void {
+  teardownDragDrop?.();
+
+  const grid = document.createElement("div");
+  grid.className = "tiles-grid";
+
+  tiles = shaders.map((shader) => {
+    const tile = createTile(shader, {
+      onDelete: () => removeTile(tile),
+    });
+    grid.appendChild(tile.element);
+
+    tile.element.addEventListener("click", () => openFullscreen(tile));
+    return tile;
+  });
+
+  app.innerHTML = "";
+  app.appendChild(grid);
 
   teardownDragDrop = setupTileDragDrop(tiles.map((t) => t.element), {
     onMergeRequest: makeMergeHandler(tiles),

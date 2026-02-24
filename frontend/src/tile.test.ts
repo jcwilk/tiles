@@ -2,7 +2,7 @@
  * Tile component tests.
  * Uses [VALID CODE] placeholder to avoid real WebGL in CI.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createTile, createLoadingTile, disposeTile } from "./tile.js";
 import type { ShaderObject } from "./types.js";
 
@@ -31,6 +31,15 @@ describe("createTile", () => {
   it("disposeTile cleans up without error", () => {
     const tile = createTile(PLACEHOLDER_SHADER);
     expect(() => disposeTile(tile)).not.toThrow();
+  });
+
+  it("adds delete button when onDelete is provided", () => {
+    const onDelete = vi.fn();
+    const tile = createTile(PLACEHOLDER_SHADER, { onDelete });
+    const btn = tile.element.querySelector(".tile-delete");
+    expect(btn).toBeInstanceOf(HTMLButtonElement);
+    (btn as HTMLButtonElement).click();
+    expect(onDelete).toHaveBeenCalledOnce();
   });
 });
 

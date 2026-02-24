@@ -11,7 +11,11 @@ export interface TileElement {
   animationId: number | null;
 }
 
-export function createTile(shader: ShaderObject): TileElement {
+export interface CreateTileOptions {
+  onDelete?: () => void;
+}
+
+export function createTile(shader: ShaderObject, options?: CreateTileOptions): TileElement {
   const tile = document.createElement("div");
   tile.className = "tile";
   tile.dataset.shaderId = shader.id;
@@ -34,6 +38,18 @@ export function createTile(shader: ShaderObject): TileElement {
     engine = result.engine;
     tile.appendChild(canvas);
     tile.appendChild(label);
+
+    if (options?.onDelete) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "tile-delete";
+      deleteBtn.setAttribute("aria-label", "Delete tile");
+      deleteBtn.textContent = "×";
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        options.onDelete?.();
+      });
+      tile.appendChild(deleteBtn);
+    }
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -68,6 +84,18 @@ export function createTile(shader: ShaderObject): TileElement {
     err.className = "tile-error";
     err.textContent = result.compileError ?? result.linkError ?? "Shader failed to compile";
     tile.appendChild(err);
+
+    if (options?.onDelete) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "tile-delete";
+      deleteBtn.setAttribute("aria-label", "Delete tile");
+      deleteBtn.textContent = "×";
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        options.onDelete?.();
+      });
+      tile.appendChild(deleteBtn);
+    }
   }
 
   return {
