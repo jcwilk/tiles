@@ -69,6 +69,21 @@ npx wrangler kv:namespace create RATE_LIMIT_KV
 
 Update `worker/wrangler.toml` with the returned namespace `id`. For local dev, the worker uses simulated KV.
 
+### GitHub Actions Deployment
+
+Pushes to `master` trigger automatic deployment via `.github/workflows/deploy.yml`:
+
+- **Frontend** → GitHub Pages (e.g. `https://<user>.github.io/tiles/`)
+- **Worker** → Cloudflare Workers
+
+**Required setup:**
+
+1. **GitHub Pages**: In repo Settings → Pages, set source to **GitHub Actions**.
+2. **Secrets** (Settings → Secrets and variables → Actions):
+   - `CLOUDFLARE_API_TOKEN` — Cloudflare API token with Workers edit permission
+   - `CLOUDFLARE_ACCOUNT_ID` — Your Cloudflare account ID
+   - `VITE_API_URL` — Deployed worker URL (e.g. `https://tiles-worker.<subdomain>.workers.dev`). Deploy the worker once manually to obtain this, then add it as a secret for subsequent runs.
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system architecture.
 
 ## Contributing
