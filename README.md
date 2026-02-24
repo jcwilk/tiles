@@ -85,7 +85,7 @@ Pushes to `master` trigger automatic deployment via `.github/workflows/deploy.ym
 
 **Required setup:**
 
-1. **GitHub Pages**: In repo Settings → Pages, set source to **GitHub Actions**.
+1. **GitHub Pages**: In repo Settings → Pages, set source to **GitHub Actions**. See [docs/github-pages-setup.md](docs/github-pages-setup.md) for step-by-step instructions.
 2. **Secrets** (Settings → Secrets and variables → Actions):
    - `CLOUDFLARE_API_TOKEN` — Cloudflare API token with Workers edit permission
    - `CLOUDFLARE_ACCOUNT_ID` — Your Cloudflare account ID

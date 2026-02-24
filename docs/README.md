@@ -2,6 +2,7 @@
 
 This directory contains domain-specific knowledge and topic-specific deep dives.
 
+- [GitHub Pages Setup](github-pages-setup.md) — One-time manual configuration for Pages source.
 - *(Future Link)*: WebGL Sandbox & Backbuffer implementation details.
 - [Prompt Evaluation Tooling — Research Decision](prompt-eval-decision.md)
 - *(Future Link)*: AI Prompts and LLM Code Generation Strategy.
