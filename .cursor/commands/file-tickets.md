@@ -6,6 +6,15 @@ description: Break the conversation's conclusion (plan, agreement, or hazy outli
 
 Turn the **conclusion of this conversation** into a structured set of tickets. The conclusion might be a detailed plan, a hazy agreement, a list of goals, or anything in between. Your job is to ensure every part is represented in at least one ticket, and that dependencies are correctly modeled.
 
+## Scope: Filing Only
+
+**Do not implement or start any work described in the tickets.** This command is purely for:
+- Passive investigative work (reading the conversation, extracting the conclusion, understanding the plan)
+- Creating the epic and tickets
+- Committing and pushing the new ticket files
+
+Do not run `./tk start`, write code, or make changes beyond adding `.tickets/*.md` files. Implementation happens later via `/work-next`, `/work-all`, or manual ticket work.
+
 ## Workflow
 
 1. **Extract the conclusion**: Review the conversation and identify what was agreed, planned, or outlined. Summarize it clearly before proceeding.
@@ -19,6 +28,7 @@ Turn the **conclusion of this conversation** into a structured set of tickets. T
    - Run `./tk dep cycle` to verify there are no dependency cycles.
 5. **Verify coverage**: Walk through your extracted conclusion and confirm each item maps to at least one ticket. Adjust or add tickets if needed.
 6. **Summarize**: Present the epic, its child tickets, and the dependency graph (e.g. `./tk dep tree <epic-id>` or `./tk show` for key tickets).
+7. **Commit and push**: The filing is **not complete** until the new tickets are committed and pushed. Stage only the ticket files you created (e.g. `git add .tickets/til-abc.md .tickets/til-def.md` for the new IDs), **not** unrelated uncommitted files in the working directory. Commit as a group with a descriptive message (e.g. `Add epic til-xxx: <title>`) and push to remote.
 
 ## Tips
 
@@ -26,3 +36,4 @@ Turn the **conclusion of this conversation** into a structured set of tickets. T
 - **Granularity**: Prefer smaller, focused tickets over large monolithic ones. A ticket should be completable in one focused session.
 - **Dependencies matter**: If the plan implies order (e.g. "first we need X, then we can do Y"), model it with `dep`. Incorrect or missing dependencies will block or confuse future work.
 - **Types**: Use `-t feature` for new capabilities, `-t task` for implementation work, `-t chore` for maintenance, `-t bug` for fixes.
+- **Clean commits**: Before committing, run `git status` and stage only the new `.tickets/*.md` files. Do not include implementation code, WIP, or debug edits — only ticket files.
