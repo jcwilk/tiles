@@ -191,6 +191,45 @@ body {
   color: #fff;
 }
 
+/* Add new tile button */
+.tile-add-new {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(100, 180, 255, 0.15);
+  border: 2px dashed rgba(100, 180, 255, 0.5);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.tile-add-new:hover:not(:disabled) {
+  background: rgba(100, 180, 255, 0.25);
+  border-color: rgba(100, 180, 255, 0.8);
+}
+
+.tile-add-new:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.tile-add-new.tile-add-loading {
+  pointer-events: none;
+}
+
+.tile-add-icon {
+  font-size: 2rem;
+  font-weight: 300;
+  color: rgba(100, 180, 255, 0.9);
+}
+
+.tile-add-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(200, 220, 255, 0.9);
+}
+
 /* Fullscreen overlay */
 .fullscreen {
   position: fixed;

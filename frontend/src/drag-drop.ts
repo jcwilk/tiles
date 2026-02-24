@@ -31,8 +31,10 @@ export function setupTileDragDrop(
   function findTileAt(x: number, y: number): HTMLElement | null {
     const el = document.elementFromPoint(x, y);
     const tile = el?.closest(".tile") ?? null;
-    if (!tile || (tile as HTMLElement).classList.contains("tile-loading")) return null;
-    return tile as HTMLElement;
+    if (!tile) return null;
+    const t = tile as HTMLElement;
+    if (t.classList.contains("tile-loading") || t.classList.contains("tile-add-new")) return null;
+    return t;
   }
 
   function createDragPreview(): void {

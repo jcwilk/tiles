@@ -9,6 +9,7 @@ import { createTile, createLoadingTile, disposeTile, type TileElement } from "./
 import { setupTileDragDrop } from "./drag-drop.js";
 import { performMerge } from "./merge.js";
 import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
+import { performAddFromVoice } from "./add-from-voice.js";
 import type { ShaderObject } from "./types.js";
 
 const appEl = document.getElementById("app");
@@ -157,12 +158,59 @@ function renderGrid(shaders: ShaderObject[]): void {
     return tile;
   });
 
+  const addBtn = createAddTileButton();
+  grid.appendChild(addBtn);
+
   app.innerHTML = "";
   app.appendChild(grid);
 
   teardownDragDrop = setupTileDragDrop(tiles.map((t) => t.element), {
     onMergeRequest: makeMergeHandler(tiles),
   });
+}
+
+function createAddTileButton(): HTMLElement {
+  const btn = document.createElement("button");
+  btn.className = "tile tile-add-new";
+  btn.setAttribute("aria-label", "Add new tile with voice");
+  btn.innerHTML = '<span class="tile-add-icon">+</span><span class="tile-add-label">Add tile</span>';
+
+  btn.addEventListener("click", async () => {
+    if (!storage) return;
+
+    btn.disabled = true;
+    btn.classList.add("tile-add-loading");
+    const label = btn.querySelector(".tile-add-label");
+    if (label) label.textContent = "Recording…";
+
+    const result = await performAddFromVoice(storage);
+
+    btn.disabled = false;
+    btn.classList.remove("tile-add-loading");
+    if (label) label.textContent = "Add tile";
+
+    if (result.success && result.shader) {
+      const grid = btn.parentElement;
+      if (!grid) return;
+
+      const newTile = createTile(result.shader, {
+        onDelete: () => removeTile(newTile),
+      });
+      newTile.element.classList.add("tile-merge-appear");
+      newTile.element.addEventListener("click", () => openFullscreen(newTile));
+
+      grid.insertBefore(newTile.element, btn);
+      tiles = [...tiles, newTile];
+
+      teardownDragDrop?.();
+      const allEls = Array.from(grid.querySelectorAll(".tile"));
+      teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
+        onMergeRequest: makeMergeHandler(tiles),
+      });
+    }
+  });
+
+  return btn;
 }
 
 function openFullscreen(tile: TileElement): void {

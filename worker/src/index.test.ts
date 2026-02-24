@@ -35,14 +35,19 @@ function createMockKV(initial?: Map<string, string>): KVNamespace & { store: Map
   } as unknown as KVNamespace & { store: Map<string, string> };
 }
 
+const WHISPER_MODEL = "@cf/openai/whisper";
+
 function createMockAI(response: string, tokens = 100): Ai {
   return {
-    run: vi.fn(() =>
-      Promise.resolve({
+    run: vi.fn((model: string) => {
+      if (model === WHISPER_MODEL) {
+        return Promise.resolve({ text: "transcribed shader description" });
+      }
+      return Promise.resolve({
         response,
         usage: { prompt_tokens: 50, completion_tokens: tokens, total_tokens: 50 + tokens },
-      })
-    ),
+      });
+    }),
   } as unknown as Ai;
 }
 
@@ -268,6 +273,124 @@ describe("worker", () => {
       });
       const res = await worker.fetch(req, env, {} as ExecutionContext);
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe("POST /transcribe", () => {
+    it("rejects request without allowed origin", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/transcribe", {
+        method: "POST",
+        headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
+        body: JSON.stringify({ audioBase64: btoa("fake-audio") }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects missing or invalid audioBase64", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/transcribe", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("audioBase64");
+    });
+
+    it("returns transcription for valid audio", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/transcribe", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ audioBase64: btoa("fake-audio-bytes") }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { text: string };
+      expect(body.text).toBe("transcribed shader description");
+      expect(env.AI.run).toHaveBeenCalledWith(
+        WHISPER_MODEL,
+        expect.objectContaining({ audio: expect.any(Array) })
+      );
+    });
+  });
+
+  describe("POST /generate-from-prompt", () => {
+    it("rejects request without allowed origin", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/generate-from-prompt", {
+        method: "POST",
+        headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "blue gradient" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects missing or invalid prompt", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/generate-from-prompt", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("prompt");
+    });
+
+    it("returns generated shader for valid prompt", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/generate-from-prompt", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({ prompt: "a blue gradient shader" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { fragmentSource: string; tokensUsed: number };
+      expect(body.fragmentSource).toBe("[VALID CODE]");
+      expect(typeof body.tokensUsed).toBe("number");
+    });
+
+    it("accepts optional previousError for retry context", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/generate-from-prompt", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          prompt: "blue gradient",
+          previousError: "syntax error at line 5",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: "user",
+              content: expect.stringContaining("syntax error at line 5"),
+            }),
+          ]),
+        })
+      );
     });
   });
 

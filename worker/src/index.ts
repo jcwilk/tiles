@@ -4,6 +4,7 @@
  */
 
 const MODEL = "@cf/meta/llama-3.1-8b-instruct-awq" as const;
+const WHISPER_MODEL = "@cf/openai/whisper" as const;
 
 /** Allowed origins: GitHub Pages (*.github.io) and localhost for dev */
 const ALLOWED_ORIGIN_PATTERNS = [
@@ -79,6 +80,14 @@ export default {
       return handleGenerate(request, env, corsHeaders);
     }
 
+    if (url.pathname === "/transcribe" && request.method === "POST") {
+      return handleTranscribe(request, env, corsHeaders);
+    }
+
+    if (url.pathname === "/generate-from-prompt" && request.method === "POST") {
+      return handleGenerateFromPrompt(request, env, corsHeaders);
+    }
+
     return jsonResponse({ error: "Not Found" }, 404, corsHeaders);
   },
 
@@ -95,6 +104,183 @@ function getCorsHeaders(origin: string, env: Env): Record<string, string> {
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
+}
+
+interface TranscribeBody {
+  /** Base64-encoded audio (WAV, MP3, WebM, etc.) */
+  audioBase64: string;
+}
+
+async function handleTranscribe(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const origin = request.headers.get("Origin") ?? "";
+  if (!isOriginAllowed(origin, env)) {
+    return jsonResponse({ error: "Forbidden: origin not allowed" }, 403, corsHeaders);
+  }
+
+  let body: TranscribeBody;
+  try {
+    body = (await request.json()) as TranscribeBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
+  }
+
+  const { audioBase64 } = body;
+  if (typeof audioBase64 !== "string" || !audioBase64) {
+    return jsonResponse({ error: "Missing or invalid audioBase64" }, 400, corsHeaders);
+  }
+
+  let audioBytes: number[];
+  try {
+    const binary = atob(audioBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    audioBytes = [...bytes];
+  } catch {
+    return jsonResponse({ error: "Invalid base64 audio data" }, 400, corsHeaders);
+  }
+
+  if (audioBytes.length === 0) {
+    return jsonResponse({ error: "Audio data is empty" }, 400, corsHeaders);
+  }
+
+  try {
+    const response = (await env.AI.run(WHISPER_MODEL, { audio: audioBytes })) as { text?: string };
+    const text = typeof response.text === "string" ? response.text.trim() : "";
+    return jsonResponse({ text }, 200, corsHeaders);
+  } catch (err) {
+    console.error("Whisper transcription error:", err);
+    return jsonResponse(
+      {
+        error: "Transcription failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      },
+      502,
+      corsHeaders
+    );
+  }
+}
+
+interface GenerateFromPromptBody {
+  prompt: string;
+  previousError?: string;
+}
+
+async function handleGenerateFromPrompt(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const origin = request.headers.get("Origin") ?? "";
+  if (!isOriginAllowed(origin, env)) {
+    return jsonResponse({ error: "Forbidden: origin not allowed" }, 403, corsHeaders);
+  }
+
+  let body: GenerateFromPromptBody;
+  try {
+    body = (await request.json()) as GenerateFromPromptBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
+  }
+
+  const { prompt, previousError } = body;
+  if (typeof prompt !== "string" || !prompt.trim()) {
+    return jsonResponse({ error: "Missing or invalid prompt" }, 400, corsHeaders);
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const limits = await getLimits(env);
+
+  const rateLimitResult = await checkRateLimits(env.RATE_LIMIT_KV, ip, limits);
+  if (!rateLimitResult.allowed) {
+    return jsonResponse(
+      {
+        error: "Rate limit exceeded",
+        retryAfter: rateLimitResult.retryAfter,
+      },
+      429,
+      {
+        ...corsHeaders,
+        ...(rateLimitResult.retryAfter ? { "Retry-After": String(rateLimitResult.retryAfter) } : {}),
+      }
+    );
+  }
+
+  const userPrompt = buildGenerateFromPromptUserMessage(prompt.trim(), previousError);
+
+  try {
+    const response = await env.AI.run(MODEL, {
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert GLSL shader programmer. You generate WebGL fragment shaders from natural language descriptions.
+
+CRITICAL: Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
+Required format:
+- First line: #version 300 es
+- Second line: precision highp float;
+- Required API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
+- End with your main() and fragColor assignment.`,
+        },
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: 1024,
+    });
+
+    const result = response as {
+      response?: string;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+    };
+    const generated = typeof result.response === "string" ? result.response : String(result?.response ?? "");
+    const usage = result.usage;
+    const tokensUsed = usage?.total_tokens ?? estimateTokens(userPrompt + generated);
+
+    await incrementRateLimits(env.RATE_LIMIT_KV, ip, tokensUsed);
+
+    const fragmentSource = sanitizeGLSL(generated);
+
+    return jsonResponse(
+      {
+        fragmentSource,
+        tokensUsed,
+      },
+      200,
+      corsHeaders
+    );
+  } catch (err) {
+    console.error("AI run error:", err);
+    return jsonResponse(
+      {
+        error: "AI generation failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      },
+      502,
+      corsHeaders
+    );
+  }
+}
+
+function buildGenerateFromPromptUserMessage(prompt: string, previousError?: string): string {
+  let msg = `Generate a GLSL fragment shader based on this description:
+
+"${prompt}"
+
+Output raw GLSL only. Start with:
+#version 300 es
+precision highp float;
+
+Use: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
+`;
+  if (previousError) {
+    msg += `\nThe previous attempt failed to compile. Fix the error and output corrected GLSL (raw code only, no markdown):\n${previousError}\n\n`;
+  }
+  msg += `Output the fragment shader (raw GLSL, no \`\`\` fences):`;
+  return msg;
 }
 
 function isOriginAllowed(origin: string, env: Env): boolean {
