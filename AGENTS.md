@@ -34,6 +34,8 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
 
 ## Useful Commands
 
+See [TOOLS.md](TOOLS.md) for full script reference.
+
 - `./tk help`: Show ticket system help.
 - `./tk ready`: Show tasks ready to be worked on.
 - `./tk show <id>`: Show details of a specific ticket.
