@@ -46,6 +46,15 @@ See [TOOLS.md](TOOLS.md) for full script reference.
 - `npm run dev`: Run local Vite server and Wrangler worker proxy (frontend + worker).
 - `npm test`: Run full-stack test suite (Vitest in frontend and worker).
 
+## Cursor Cloud specific instructions
+
+- **Monorepo layout**: npm workspaces with `frontend/` (Vite + TypeScript SPA) and `worker/` (Cloudflare Worker via Wrangler). Root `package.json` orchestrates both.
+- **Environment file**: Copy `.env.example` → `.env` if it doesn't exist. Default `VITE_API_URL=http://localhost:8787` is correct for local dev.
+- **Dev servers**: `npm run dev` starts both Vite (port 5173) and Wrangler (port 8787) concurrently. The worker's root `/` returns 404 — use `GET /usage` to verify it's running.
+- **Lint / Test / Build**: `npm run lint`, `npm test`, `npm run build` — all documented in `TOOLS.md`. Unit tests run fully offline with mocks (no GPU, no network, no Cloudflare credentials needed).
+- **AI merge requires Cloudflare credentials**: Dragging tiles to merge calls Cloudflare Workers AI. Without `npx wrangler login` or `CLOUDFLARE_API_TOKEN`, merges will fail at the network layer — but all other app features (tile rendering, expansion, navigation, storage) work locally without credentials.
+- **E2E tests** (`npm run test:e2e -w frontend`) require Playwright Chromium installed (`npx playwright install chromium`) and both dev servers running.
+
 ---
 
 *Last Updated: 2026-02-24*
