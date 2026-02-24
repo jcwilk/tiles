@@ -25,7 +25,7 @@ Limits are configurable via KV (`config:limits`) or env vars (`IP_PER_HOUR`, `GL
 
 `./rl cost` shows three sections:
 
-1. **Actual Spend** — From Cloudflare GraphQL API. Requires `CF_API_TOKEN` and `CF_ACCOUNT_ID`. Converts neuron usage to dollars at $0.011/1,000 neurons, minus 10K free daily neurons.
+1. **Actual Spend** — From Cloudflare GraphQL API. Requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Converts neuron usage to dollars at $0.011/1,000 neurons, minus 10K free daily neurons.
 
 2. **Estimated Spend** — From worker `/usage` counters. Converts tracked tokens to estimated cost using per-model neuron rates. Clearly labeled as estimates.
 

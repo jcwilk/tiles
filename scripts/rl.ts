@@ -86,8 +86,8 @@ Examples:
 
 Environment:
   RATE_LIMIT_API_URL  Base URL for worker (default: http://localhost:8787)
-  CF_API_TOKEN        Cloudflare API token (for cost actual spend)
-  CF_ACCOUNT_ID       Cloudflare account ID (for cost actual spend)`);
+  CLOUDFLARE_API_TOKEN   Cloudflare API token (for cost actual spend)
+  CLOUDFLARE_ACCOUNT_ID  Cloudflare account ID (for cost actual spend)`);
 }
 
 function usageUsageHelp(): void {
@@ -131,7 +131,7 @@ function costHelp(): void {
   console.log(`Usage: ./rl cost
 
 Shows three sections:
-  (1) Actual Spend   From Cloudflare GraphQL API (requires CF_API_TOKEN, CF_ACCOUNT_ID)
+  (1) Actual Spend   From Cloudflare GraphQL API (requires CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)
   (2) Estimated      From worker /usage tokens, converted via model pricing
   (3) Max Potential   Worst-case cost at current rate limits`);
 }
@@ -166,8 +166,8 @@ async function cmdCost(args: string[]): Promise<number> {
     costHelp();
     return 0;
   }
-  const cfToken = process.env.CF_API_TOKEN;
-  const cfAccountId = process.env.CF_ACCOUNT_ID;
+  const cfToken = process.env.CLOUDFLARE_API_TOKEN;
+  const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 
   // Load model config for pricing
   let textModelId = "@cf/meta/llama-3.1-8b-instruct-awq";
@@ -185,7 +185,7 @@ async function cmdCost(args: string[]): Promise<number> {
   console.log("=== (1) Actual Spend (Cloudflare API) ===");
   if (!cfToken || !cfAccountId) {
     console.log(
-      "Set CF_API_TOKEN and CF_ACCOUNT_ID to view actual spend from Cloudflare GraphQL API."
+      "Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to view actual spend from Cloudflare GraphQL API."
     );
   } else {
     try {
