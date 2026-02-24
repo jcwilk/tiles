@@ -20,11 +20,15 @@ Process **all** ready tickets one by one. For each ticket, spawn a subagent to c
      - `git status` — working tree must be clean (no uncommitted changes).
      - `git log -1 --oneline` — confirm a recent commit for this work.
      - `git status` with respect to remote — ensure changes are pushed (e.g. `git status` shows "Your branch is up to date" or equivalent; if ahead, run `git push`).
-   - If verification fails: report the failure, do not proceed to the next ticket until the user resolves it or explicitly instructs to continue.
+   - **If verification fails** (subagent didn't finish, didn't commit, didn't push, or left a dirty tree):
+     - **STOP. Do NOT proceed to the next ticket.**
+     - As orchestrator, you must **sort it out**: fix the state yourself. Stage any uncommitted changes, commit with a descriptive message, push to remote, and close the ticket with `./tk close <id>` if still open.
+     - Only after the directory is clean, the ticket is closed, and changes are pushed may you move to the next ticket.
+     - If you cannot resolve it (e.g. merge conflicts, user intervention needed), report the failure and stop. Do not proceed.
 4. **Report**: After all tickets are done, summarize what was completed.
 
 ## Important
 
 - **Sequential processing**: Do not run multiple ticket workers in parallel. Git conflicts are likely if two agents commit simultaneously.
-- **Orchestrator responsibility**: You (the agent running this command) are the orchestrator. You spawn subagents and **must** verify each ticket's completion before moving on.
+- **Orchestrator responsibility**: You (the agent running this command) are the orchestrator. You spawn subagents and **must** verify each ticket's completion before moving on. If a subagent leaves work incomplete, **you** must fix it — get the directory clean, commit, push — before the next ticket. Never proceed with a dirty tree or unpushed commits.
 - **Commit and push**: Each ticket's work must be committed and pushed. Do not leave uncommitted or unpushed changes.

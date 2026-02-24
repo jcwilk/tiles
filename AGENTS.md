@@ -10,6 +10,7 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
     - Create new tickets for sub-tasks or bugs discovered.
     - Close tasks with `./tk close <id>` only after verification.
     - **Note**: `./tk ready` shows unblocked tasks; `./tk blocked` shows blocked ones; `./tk closed` shows recently closed.
+    - **Task completion is incomplete without commit and push.** When you finish a ticket — including when working as a subagent — you MUST stage all changes, commit with a descriptive message, and push to remote. Do not leave uncommitted or unpushed work. A closed ticket with a dirty tree or unpushed commits is not done.
 2.  **Documentation First**: Before making significant changes, consult `ARCHITECTURE.md` and `CONVENTIONS.md` in the project root.
     - For domain-specific knowledge, see `docs/README.md`.
     - Respect the "gardened" nature of the documentation.
@@ -24,13 +25,13 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
     - Run `./tk ready` to identify the highest priority available task.
     - Run `./tk start <id>` to mark the ticket as in-progress.
     - Run `./tk show <id>` to orient yourself to the requirements and design.
-    - After closing a ticket, commit and push changes before picking up the next task.
+    - **Before finishing**: Run `./tk close <id>`, then stage all changes, commit, and push. Do not consider the task complete until `git status` is clean and changes are pushed. This applies to subagents as well — if you are spawned to work a ticket, your final step must be commit and push.
 2.  **Discovery**: Explore the codebase, root documentation, and `docs/` to understand the context.
 3.  **Strategy**: Propose a plan before execution.
 4.  **Execution**:
     - Use the `./tk` symlink (pointing to `./scripts/ticket`) for task management.
     - Follow `CONVENTIONS.md`.
-5.  **Validation**: Run tests and linting before finishing. Ensure dev environment respects configuration for local endpoints.
+5.  **Validation**: Run tests and linting before finishing. Ensure dev environment respects configuration for local endpoints. Before declaring a ticket done, verify `git status` shows a clean working tree and no unpushed commits.
 
 ## Useful Commands
 
