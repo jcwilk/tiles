@@ -18,7 +18,7 @@
 
 ### 1. Frontend Web App
 - **UI Grid**: Displays responsive tiles containing running shaders. Mobile-first design.
-- **Interactions**: Dragging a tile onto another triggers an AI merge request. Tapping a tile expands it to full screen, pushing a state to the browser history to support "Back" navigation.
+- **Interactions**: Dragging a tile onto another triggers an AI merge request. Tapping a tile expands it to full screen, pushing a state to the browser history to support "Back" navigation. User-created and merged tiles can be deleted; the six built-in seed tiles (Gradient, Plasma, Noise, Circles, Stripes, Rainbow) cannot be deleted.
 - **Shader Execution**: Each tile maintains a WebGL context (or shared context). A consistent GLSL API is injected (e.g., `time`, `backbuffer`, `resolution`, `touch`, `multitouch`). 
 - **Compilation Retries**: If the AI returns GLSL that fails to compile, the frontend catches the error and automatically requests a retry from the LLM, passing the error as context (maximum 3 retries).
 - **Test Mode Hooks**: For full-stack testing, the frontend detects a special test flag and intercepts GPU/network calls. Test stubs like `[VALID CODE]` or `[INVALID CODE]` are used to bypass actual shader compilation while validating application logic.
@@ -44,4 +44,4 @@
 
 ---
 
-*Last Updated: 2026-02-23*
+*Last Updated: 2026-02-24*
