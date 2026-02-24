@@ -46,6 +46,15 @@ See [TOOLS.md](TOOLS.md) for full script reference.
 - `npm run dev`: Run local Vite server and Wrangler worker proxy (frontend + worker).
 - `npm test`: Run full-stack test suite (Vitest in frontend and worker).
 
+## Cursor Cloud specific instructions
+
+- **Environment file**: Copy `.env.example` to `.env` before starting dev servers. The defaults point the frontend at the local worker (`http://localhost:8787`).
+- **Dev servers**: `npm run dev` starts both Vite (port 5173) and Wrangler (port 8787) via `concurrently`. The worker's `/usage` endpoint is a quick health check: `curl http://localhost:8787/usage`.
+- **Lint**: `./lint` (or `npm run lint`) runs `tsc --noEmit` across both workspaces — no ESLint.
+- **Tests**: `npm test` runs Vitest in both `frontend/` and `worker/`. The `shader-engine.test.ts` stderr about missing `canvas` in jsdom is expected and does not indicate failure.
+- **AI merge requires Cloudflare credentials**: Tile-merging (drag-and-drop) calls Cloudflare Workers AI remotely. Without `CLOUDFLARE_API_TOKEN` the merge request will fail at the AI step, but the frontend, worker proxy, and all local tests work fine without it.
+- **Prompt-eval tests are gated**: `npm test` excludes `prompt-eval.test.ts`. Run those separately with `PROMPT_EVAL=1 npm run test:eval -w worker` only when changing prompts/seed shaders.
+
 ---
 
 *Last Updated: 2026-02-24*
