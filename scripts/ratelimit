@@ -4,14 +4,20 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# When run via ./rl symlink, SCRIPT_DIR is project root; when run as scripts/ratelimit, SCRIPT_DIR is scripts/
+if [[ -d "$SCRIPT_DIR/worker" ]]; then
+  ROOT_DIR="$SCRIPT_DIR"
+else
+  ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 WORKER_DIR="$ROOT_DIR/worker"
 WRANGLER_CONFIG="$WORKER_DIR/wrangler.toml"
 KV_BINDING="RATE_LIMIT_KV"
 API_URL="${RATE_LIMIT_API_URL:-http://localhost:8787}"
 
+# Use --preview for local KV when both id and preview_id exist in wrangler.toml
 wrangler() {
-  command npx wrangler "$@" --config "$WRANGLER_CONFIG"
+  command npx wrangler "$@" --config "$WRANGLER_CONFIG" --preview
 }
 
 usage_help() {
@@ -39,6 +45,49 @@ Environment:
 EOF
 }
 
+usage_usage_help() {
+  cat <<'EOF'
+Usage: ./rl usage [options]
+
+Options:
+  --hour        Show hour usage (default: on)
+  --day         Show day usage (default: on)
+  --ip <addr>   Include IP-specific hour usage from KV
+
+Examples:
+  ./rl usage                    # hour + day from GET /usage
+  ./rl usage --ip 1.2.3.4       # include IP-specific hour usage
+EOF
+}
+
+limits_help() {
+  cat <<'EOF'
+Usage: ./rl limits <subcommand>
+
+Subcommands:
+  show   Show current KV overrides (config:limits)
+  set    Set limits: ./rl limits set '<json>'
+
+Examples:
+  ./rl limits set '{"ipPerHour":20000,"globalPerHour":150000}'
+EOF
+}
+
+alerts_help() {
+  cat <<'EOF'
+Usage: ./rl alerts <subcommand>
+
+Subcommands:
+  show     Show alert config (config:alerts)
+  set      Set config: ./rl alerts set '<json>'
+  enable   Enable with default config
+  disable  Remove config:alerts
+
+Examples:
+  ./rl alerts set '{"email":"admin@example.com","thresholdPercent":80}'
+EOF
+}
+
 cmd_usage() {
   local show_hour=1 show_day=1 show_ip=""
   while [[ $# -gt 0 ]]; do
@@ -46,7 +95,8 @@ cmd_usage() {
       --hour) show_hour=1; shift ;;
       --day)  show_day=1; shift ;;
       --ip)   show_ip="$2"; shift 2 ;;
-      *) echo "Unknown option: $1" >&2; usage_help >&2; exit 1 ;;
+      --help|-h) usage_usage_help; exit 0 ;;
+      *) echo "Unknown option: $1" >&2; usage_usage_help >&2; exit 1 ;;
     esac
   done
 
@@ -86,6 +136,7 @@ cmd_limits() {
   shift || true
 
   case "$sub" in
+    help|--help|-h) limits_help; exit 0 ;;
     show)
       local raw
       raw=$(wrangler kv key get "config:limits" --binding "$KV_BINDING" --text 2>/dev/null || echo "")
@@ -111,7 +162,7 @@ cmd_limits() {
       ;;
     *)
       echo "Unknown: limits $sub" >&2
-      echo "  show | set" >&2
+      limits_help >&2
       exit 1
       ;;
   esac
@@ -122,6 +173,7 @@ cmd_alerts() {
   shift || true
 
   case "$sub" in
+    help|--help|-h) alerts_help; exit 0 ;;
     show)
       local raw
       raw=$(wrangler kv key get "config:alerts" --binding "$KV_BINDING" --text 2>/dev/null || echo "")
@@ -163,7 +215,7 @@ cmd_alerts() {
       ;;
     *)
       echo "Unknown: alerts $sub" >&2
-      echo "  show | set | enable | disable" >&2
+      alerts_help >&2
       exit 1
       ;;
   esac
