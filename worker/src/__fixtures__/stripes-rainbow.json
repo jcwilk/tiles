@@ -1,0 +1,8 @@
+{
+  "inputHash": "f35dd84d5e4554bf9b169e136c7b0025f819354d1abf0c1a4e6b7bdf4e071ab2",
+  "fragmentA": "#version 300 es\nprecision highp float;\nuniform float u_time;\nuniform vec2 u_resolution;\nuniform vec2 u_touch;\nin vec2 v_uv;\nout vec4 fragColor;\nvoid main() {\n  float stripes = sin(v_uv.y * 20.0 + u_time * 4.0) * 0.5 + 0.5;\n  stripes *= sin(v_uv.x * 15.0 + u_time * 2.0) * 0.5 + 0.5;\n  vec3 col = vec3(stripes, stripes * 0.7, 1.0 - stripes);\n  fragColor = vec4(col, 1.0);\n}\n",
+  "fragmentB": "#version 300 es\nprecision highp float;\nuniform float u_time;\nuniform vec2 u_resolution;\nuniform vec2 u_touch;\nin vec2 v_uv;\nout vec4 fragColor;\nvoid main() {\n  float hue = v_uv.x + u_time * 0.2;\n  hue = fract(hue);\n  vec3 col = vec3(\n    abs(hue * 6.0 - 3.0) - 1.0,\n    2.0 - abs(hue * 6.0 - 2.0),\n    2.0 - abs(hue * 6.0 - 4.0)\n  );\n  col = clamp(col, 0.0, 1.0);\n  float fade = sin(v_uv.y * 3.14) * 0.5 + 0.5;\n  col *= fade;\n  fragColor = vec4(col, 1.0);\n}\n",
+  "previousError": null,
+  "output": "#version 300 es\nprecision highp float;\nuniform float u_time;\nuniform vec2 u_resolution;\nuniform vec2 u_touch;\nin vec2 v_uv;\nout vec4 fragColor;\nvoid main() {\n  fragColor = vec4(0.5, 0.5, 0.5, 1.0);\n}\n",
+  "recordedAt": "2026-02-23T12:00:00Z"
+}
