@@ -1,6 +1,6 @@
 ---
 id: til-ghl3
-status: open
+status: closed
 deps: [til-s37z]
 links: []
 created: 2026-02-24T09:56:43Z

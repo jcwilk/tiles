@@ -3,6 +3,7 @@
 This directory contains domain-specific knowledge and topic-specific deep dives.
 
 - [GitHub Pages Setup](github-pages-setup.md) — One-time manual configuration for Pages source.
+- [Merge Test Coverage Gaps](merge-test-gaps.md) — Investigation of why merge failures in production are not caught by tests (til-s37z).
 - *(Future Link)*: WebGL Sandbox & Backbuffer implementation details.
 - [Prompt Evaluation Tooling — Research Decision](prompt-eval-decision.md)
 - *(Future Link)*: AI Prompts and LLM Code Generation Strategy.

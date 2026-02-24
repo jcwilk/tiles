@@ -160,4 +160,37 @@ describe("performMerge", () => {
     const all = await storage.getAll();
     expect(all).toHaveLength(2);
   });
+
+  it("shows toast and returns failure when API returns 200 but fragmentSource is missing", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ tokensUsed: 100 }),
+    });
+
+    const storage = createInMemoryStorage();
+    const result = await performMerge(MOCK_SHADER, MOCK_SHADER_B, storage);
+
+    expect(result.success).toBe(false);
+    expect(result.shader).toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    const { showToast } = await import("./toast.js");
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining("Merge failed"));
+  });
+
+  it("shows toast and returns failure when API returns 200 but fragmentSource is not a string", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ fragmentSource: 123, tokensUsed: 100 }),
+    });
+
+    const storage = createInMemoryStorage();
+    const result = await performMerge(MOCK_SHADER, MOCK_SHADER_B, storage);
+
+    expect(result.success).toBe(false);
+    expect(result.shader).toBeUndefined();
+
+    const { showToast } = await import("./toast.js");
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining("Merge failed"));
+  });
 });
