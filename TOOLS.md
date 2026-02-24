@@ -12,6 +12,7 @@ Run from project root. Symlinks point to `scripts/`.
 | `./rl` | Rate limit CLI. Usage, limits, and alerts. Uses Wrangler KV and `GET /usage` from the worker. Requires worker running. `RATE_LIMIT_API_URL` (default: http://localhost:8787). Run `./rl help` for subcommands. |
 | `./srv` | Server status and management. Check local/remote endpoints (`status`, `status local`, `status remote`), start/stop/restart dev servers. `VITE_DEV_URL`, `WORKER_DEV_URL` for local; `SRV_REMOTE_FRONTEND_URL`, `SRV_REMOTE_WORKER_URL` for remote. Run `./srv help` for usage. |
 | `./lint` | TypeScript check (`tsc --noEmit`) for frontend and worker. Invokes tsc directly (no npm). |
+| `./test-add-from-voice` | Run add-from-voice Vitest test only. Use for quick pre-deploy validation when Cloudflare deploy failures require re-running this test. |
 
 ## npm Scripts (root)
 

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Run add-from-voice Vitest test for quick pre-deploy validation.
+# Use when Cloudflare deploy failures require re-running this specific test.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -d "$SCRIPT_DIR/worker" ]]; then
+  ROOT_DIR="$SCRIPT_DIR"
+else
+  ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+cd "$ROOT_DIR/frontend"
+exec npx vitest run src/add-from-voice.test.ts 2>&1
