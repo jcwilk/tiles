@@ -37,6 +37,7 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
 - `./tk help`: Show ticket system help.
 - `./tk ready`: Show tasks ready to be worked on.
 - `./tk show <id>`: Show details of a specific ticket.
+- `./lint`: Run TypeScript check (lint) across frontend and worker.
 - `/work-all`: Process all ready tickets sequentially (spawns subagent per ticket; verifies close, commit, push).
 - `/file-tickets`: Break the conversation's conclusion into tickets under a new epic (mind dependencies).
 - `npm run dev`: Run local Vite server and Wrangler worker proxy (frontend + worker).
