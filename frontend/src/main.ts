@@ -227,7 +227,10 @@ function createAddTileButton(): HTMLElement {
         onDelete: () => removeTile(newTile),
       });
       newTile.element.classList.add("tile-merge-appear");
-      newTile.element.addEventListener("click", () => openFullscreen(newTile));
+      newTile.element.addEventListener("click", (e) => {
+        if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+        openFullscreen(newTile);
+      });
 
       grid.insertBefore(newTile.element, btn);
       tiles = [...tiles, newTile];

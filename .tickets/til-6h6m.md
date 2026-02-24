@@ -1,6 +1,6 @@
 ---
 id: til-6h6m
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-24T10:24:49Z
