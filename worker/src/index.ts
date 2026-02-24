@@ -12,7 +12,7 @@ const ALLOWED_ORIGIN_PATTERNS = [
   /^http:\/\/127\.0\.0\.1(:\d+)?$/,
 ];
 
-/** Token limits (configurable via env) */
+/** Token limits (configurable via env and KV) */
 const DEFAULT_IP_PER_HOUR = 10_000;
 const DEFAULT_GLOBAL_PER_HOUR = 100_000;
 const DEFAULT_GLOBAL_PER_DAY = 500_000;
@@ -20,13 +20,41 @@ const DEFAULT_GLOBAL_PER_DAY = 500_000;
 /** Conservative estimate for a single request (prompt + response) when checking limits */
 const ESTIMATED_TOKENS_PER_REQUEST = 2000;
 
+export interface Limits {
+  ipPerHour: number;
+  globalPerHour: number;
+  globalPerDay: number;
+}
+
 export interface Env {
   AI: Ai;
   RATE_LIMIT_KV: KVNamespace;
+  ALERT_EMAIL?: SendEmail;
   ALLOWED_ORIGINS?: string;
   IP_PER_HOUR?: string;
   GLOBAL_PER_HOUR?: string;
   GLOBAL_PER_DAY?: string;
+}
+
+/** Get limits with fallback: KV config:limits -> env vars -> defaults. Exported for tests. */
+export async function getLimits(env: Env): Promise<Limits> {
+  const fromEnv = {
+    ipPerHour: parseInt(env.IP_PER_HOUR ?? "", 10) || DEFAULT_IP_PER_HOUR,
+    globalPerHour: parseInt(env.GLOBAL_PER_HOUR ?? "", 10) || DEFAULT_GLOBAL_PER_HOUR,
+    globalPerDay: parseInt(env.GLOBAL_PER_DAY ?? "", 10) || DEFAULT_GLOBAL_PER_DAY,
+  };
+  const raw = await env.RATE_LIMIT_KV.get("config:limits");
+  if (!raw) return fromEnv;
+  try {
+    const parsed = JSON.parse(raw) as { ipPerHour?: number; globalPerHour?: number; globalPerDay?: number };
+    return {
+      ipPerHour: typeof parsed.ipPerHour === "number" ? parsed.ipPerHour : fromEnv.ipPerHour,
+      globalPerHour: typeof parsed.globalPerHour === "number" ? parsed.globalPerHour : fromEnv.globalPerHour,
+      globalPerDay: typeof parsed.globalPerDay === "number" ? parsed.globalPerDay : fromEnv.globalPerDay,
+    };
+  } catch {
+    return fromEnv;
+  }
 }
 
 export default {
@@ -43,11 +71,19 @@ export default {
       return jsonResponse({ status: "ok" }, 200, corsHeaders);
     }
 
+    if (url.pathname === "/usage" && request.method === "GET") {
+      return handleUsage(env, corsHeaders);
+    }
+
     if (url.pathname === "/generate" && request.method === "POST") {
       return handleGenerate(request, env, corsHeaders);
     }
 
     return jsonResponse({ error: "Not Found" }, 404, corsHeaders);
+  },
+
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(handleScheduled(env));
   },
 };
 
@@ -75,6 +111,31 @@ function handleCorsPreflight(corsHeaders: Record<string, string>): Response {
     status: 204,
     headers: corsHeaders,
   });
+}
+
+async function handleUsage(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  const now = Date.now();
+  const hour = hourKey(now);
+  const day = dayKey(now);
+  const limits = await getLimits(env);
+
+  const [globalHourVal, globalDayVal] = await Promise.all([
+    env.RATE_LIMIT_KV.get(`global:hour:${hour}`),
+    env.RATE_LIMIT_KV.get(`global:day:${day}`),
+  ]);
+
+  const globalHourTokens = parseInt(globalHourVal ?? "0", 10);
+  const globalDayTokens = parseInt(globalDayVal ?? "0", 10);
+
+  return jsonResponse(
+    {
+      hour: { key: hour, globalTokens: globalHourTokens, limit: limits.globalPerHour },
+      day: { key: day, globalTokens: globalDayTokens, limit: limits.globalPerDay },
+      limits: { ipPerHour: limits.ipPerHour, globalPerHour: limits.globalPerHour, globalPerDay: limits.globalPerDay },
+    },
+    200,
+    corsHeaders
+  );
 }
 
 interface GenerateBody {
@@ -111,11 +172,7 @@ async function handleGenerate(
   }
 
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const limits = {
-    ipPerHour: parseInt(env.IP_PER_HOUR ?? "", 10) || DEFAULT_IP_PER_HOUR,
-    globalPerHour: parseInt(env.GLOBAL_PER_HOUR ?? "", 10) || DEFAULT_GLOBAL_PER_HOUR,
-    globalPerDay: parseInt(env.GLOBAL_PER_DAY ?? "", 10) || DEFAULT_GLOBAL_PER_DAY,
-  };
+  const limits = await getLimits(env);
 
   const rateLimitResult = await checkRateLimits(env.RATE_LIMIT_KV, ip, limits);
   if (!rateLimitResult.allowed) {
@@ -350,4 +407,81 @@ function jsonResponse(
       ...extraHeaders,
     },
   });
+}
+
+interface AlertsConfig {
+  email?: string;
+  thresholdPercent?: number;
+  alertHour?: boolean;
+  alertDay?: boolean;
+}
+
+async function handleScheduled(env: Env): Promise<void> {
+  if (!env.ALERT_EMAIL) return;
+
+  const raw = await env.RATE_LIMIT_KV.get("config:alerts");
+  if (!raw) return;
+  let config: AlertsConfig;
+  try {
+    config = JSON.parse(raw) as AlertsConfig;
+  } catch {
+    return;
+  }
+  const email = config.email;
+  const threshold = typeof config.thresholdPercent === "number" ? Math.min(100, Math.max(0, config.thresholdPercent)) : 80;
+  const alertHour = config.alertHour !== false;
+  const alertDay = config.alertDay !== false;
+  if (!email || typeof email !== "string") return;
+
+  const now = Date.now();
+  const hour = hourKey(now);
+  const day = dayKey(now);
+  const limits = await getLimits(env);
+
+  const [globalHourVal, globalDayVal] = await Promise.all([
+    env.RATE_LIMIT_KV.get(`global:hour:${hour}`),
+    env.RATE_LIMIT_KV.get(`global:day:${day}`),
+  ]);
+  const globalHourTokens = parseInt(globalHourVal ?? "0", 10);
+  const globalDayTokens = parseInt(globalDayVal ?? "0", 10);
+
+  const hourPct = limits.globalPerHour > 0 ? (globalHourTokens / limits.globalPerHour) * 100 : 0;
+  const dayPct = limits.globalPerDay > 0 ? (globalDayTokens / limits.globalPerDay) * 100 : 0;
+
+  const triggered: string[] = [];
+  if (alertHour && hourPct >= threshold) triggered.push(`hour:${hour} (${hourPct.toFixed(1)}%)`);
+  if (alertDay && dayPct >= threshold) triggered.push(`day:${day} (${dayPct.toFixed(1)}%)`);
+  if (triggered.length === 0) return;
+
+  const dedupeKeyHour = `alert:sent:hour:${hour}`;
+  const dedupeKeyDay = `alert:sent:day:${day}`;
+  const hourTriggered = alertHour && hourPct >= threshold;
+  const dayTriggered = alertDay && dayPct >= threshold;
+  const [sentHour, sentDay] = await Promise.all([
+    hourTriggered ? env.RATE_LIMIT_KV.get(dedupeKeyHour) : null,
+    dayTriggered ? env.RATE_LIMIT_KV.get(dedupeKeyDay) : null,
+  ]);
+  const needSend = (hourTriggered && sentHour === null) || (dayTriggered && sentDay === null);
+  if (!needSend) return;
+
+  const { EmailMessage } = await import("cloudflare:email");
+  const { createMimeMessage } = await import("mimetext");
+  const msg = createMimeMessage();
+  msg.setSender({ name: "Tiles Rate Limit", addr: "alerts@tiles.local" });
+  msg.setRecipient(email);
+  msg.setSubject(`Rate limit threshold (${threshold}%) exceeded`);
+  msg.addMessage({
+    contentType: "text/plain",
+    data: `Rate limit threshold (${threshold}%) exceeded:\n${triggered.join("\n")}\n\nHour: ${globalHourTokens}/${limits.globalPerHour} tokens\nDay: ${globalDayTokens}/${limits.globalPerDay} tokens`,
+  });
+
+  const message = new EmailMessage("alerts@tiles.local", email, msg.asRaw());
+  await env.ALERT_EMAIL.send(message);
+
+  const hourTtl = Math.floor(MS_PER_HOUR / 1000) + 3600;
+  const dayTtl = Math.floor(MS_PER_DAY / 1000) + 86400;
+  const puts: Promise<unknown>[] = [];
+  if (alertHour && hourPct >= threshold) puts.push(env.RATE_LIMIT_KV.put(dedupeKeyHour, "1", { expirationTtl: hourTtl }));
+  if (alertDay && dayPct >= threshold) puts.push(env.RATE_LIMIT_KV.put(dedupeKeyDay, "1", { expirationTtl: dayTtl }));
+  await Promise.all(puts);
 }

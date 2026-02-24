@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# Rate limit monitoring CLI: usage, limits, alerts
+# Uses wrangler kv and GET /usage from the worker.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKER_DIR="$ROOT_DIR/worker"
+WRANGLER_CONFIG="$WORKER_DIR/wrangler.toml"
+KV_BINDING="RATE_LIMIT_KV"
+API_URL="${RATE_LIMIT_API_URL:-http://localhost:8787}"
+
+wrangler() {
+  command npx wrangler "$@" --config "$WRANGLER_CONFIG"
+}
+
+usage_help() {
+  cat <<'EOF'
+Usage: ./rl <command> [options]
+
+Commands:
+  usage     Show token usage (hour, day, optionally by IP)
+  limits    Show or set rate limit overrides (config:limits)
+  alerts    Show or configure threshold alerts (config:alerts)
+  help      Show this help
+
+Examples:
+  ./rl usage              # hour + day from GET /usage
+  ./rl usage --ip 1.2.3.4 # include IP-specific hour usage from KV
+  ./rl limits show        # show current limits
+  ./rl limits set '{"ipPerHour":20000}'  # set KV overrides
+  ./rl alerts show        # show alert config
+  ./rl alerts set '{"email":"admin@example.com","thresholdPercent":80}'
+  ./rl alerts enable      # enable alerts (ensure config:alerts exists)
+  ./rl alerts disable     # remove config:alerts
+
+Environment:
+  RATE_LIMIT_API_URL  Base URL for worker (default: http://localhost:8787)
+EOF
+}
+
+cmd_usage() {
+  local show_hour=1 show_day=1 show_ip=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --hour) show_hour=1; shift ;;
+      --day)  show_day=1; shift ;;
+      --ip)   show_ip="$2"; shift 2 ;;
+      *) echo "Unknown option: $1" >&2; usage_help >&2; exit 1 ;;
+    esac
+  done
+
+  local json
+  json=$(curl -sSf "$API_URL/usage" 2>/dev/null) || {
+    echo "Error: could not fetch $API_URL/usage (is the worker running?)" >&2
+    exit 1
+  }
+
+  echo "=== Usage ==="
+  local hour_key day_key hour_tok day_tok hour_lim day_lim
+  hour_key=$(echo "$json" | jq -r '.hour.key')
+  day_key=$(echo "$json" | jq -r '.day.key')
+  hour_tok=$(echo "$json" | jq -r '.hour.globalTokens')
+  day_tok=$(echo "$json" | jq -r '.day.globalTokens')
+  hour_lim=$(echo "$json" | jq -r '.hour.limit')
+  day_lim=$(echo "$json" | jq -r '.day.limit')
+
+  [[ "$show_hour" == 1 ]] && echo "Hour ($hour_key): $hour_tok / $hour_lim tokens"
+  [[ "$show_day" == 1 ]]  && echo "Day  ($day_key): $day_tok / $day_lim tokens"
+
+  if [[ -n "$show_ip" ]]; then
+    local hour_iso
+    hour_iso=$(date -u +%Y-%m-%dT%H)
+    local ip_val
+    ip_val=$(wrangler kv key get "ip:${show_ip}:${hour_iso}" --binding "$KV_BINDING" --text 2>/dev/null || echo "0")
+    echo "IP $show_ip ($hour_iso): ${ip_val:-0} tokens"
+  fi
+
+  echo ""
+  echo "=== Limits ==="
+  echo "$json" | jq -r '.limits | "ipPerHour: \(.ipPerHour), globalPerHour: \(.globalPerHour), globalPerDay: \(.globalPerDay)"'
+}
+
+cmd_limits() {
+  local sub="${1:-show}"
+  shift || true
+
+  case "$sub" in
+    show)
+      local raw
+      raw=$(wrangler kv key get "config:limits" --binding "$KV_BINDING" --text 2>/dev/null || echo "")
+      if [[ -z "$raw" ]]; then
+        echo "No KV overrides (using env/defaults). Run './rl limits set {...}' to set."
+      else
+        echo "$raw" | jq .
+      fi
+      ;;
+    set)
+      local payload="$1"
+      if [[ -z "$payload" ]]; then
+        echo "Usage: ./rl limits set '<json>'" >&2
+        echo "Example: ./rl limits set '{\"ipPerHour\":20000,\"globalPerHour\":150000}'" >&2
+        exit 1
+      fi
+      if ! echo "$payload" | jq . >/dev/null 2>&1; then
+        echo "Error: invalid JSON" >&2
+        exit 1
+      fi
+      wrangler kv key put "config:limits" "$payload" --binding "$KV_BINDING"
+      echo "Updated config:limits"
+      ;;
+    *)
+      echo "Unknown: limits $sub" >&2
+      echo "  show | set" >&2
+      exit 1
+      ;;
+  esac
+}
+
+cmd_alerts() {
+  local sub="${1:-show}"
+  shift || true
+
+  case "$sub" in
+    show)
+      local raw
+      raw=$(wrangler kv key get "config:alerts" --binding "$KV_BINDING" --text 2>/dev/null || echo "")
+      if [[ -z "$raw" ]]; then
+        echo "Alerts not configured. Run './rl alerts set {...}' or './rl alerts enable'."
+      else
+        echo "$raw" | jq .
+      fi
+      ;;
+    set)
+      local payload="$1"
+      if [[ -z "$payload" ]]; then
+        echo "Usage: ./rl alerts set '<json>'" >&2
+        echo "Example: ./rl alerts set '{\"email\":\"admin@example.com\",\"thresholdPercent\":80,\"alertHour\":true,\"alertDay\":true}'" >&2
+        exit 1
+      fi
+      if ! echo "$payload" | jq . >/dev/null 2>&1; then
+        echo "Error: invalid JSON" >&2
+        exit 1
+      fi
+      wrangler kv key put "config:alerts" "$payload" --binding "$KV_BINDING"
+      echo "Updated config:alerts"
+      ;;
+    enable)
+      local raw
+      raw=$(wrangler kv key get "config:alerts" --binding "$KV_BINDING" --text 2>/dev/null || echo "")
+      if [[ -n "$raw" ]]; then
+        echo "Alerts already configured:"
+        echo "$raw" | jq .
+      else
+        local default='{"email":"alerts@example.com","thresholdPercent":80,"alertHour":true,"alertDay":true}'
+        wrangler kv key put "config:alerts" "$default" --binding "$KV_BINDING"
+        echo "Enabled alerts with default config. Run './rl alerts set {...}' to customize."
+      fi
+      ;;
+    disable)
+      wrangler kv key delete "config:alerts" --binding "$KV_BINDING"
+      echo "Alerts disabled (config:alerts removed)"
+      ;;
+    *)
+      echo "Unknown: alerts $sub" >&2
+      echo "  show | set | enable | disable" >&2
+      exit 1
+      ;;
+  esac
+}
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    usage)  cmd_usage "$@" ;;
+    limits) cmd_limits "$@" ;;
+    alerts) cmd_alerts "$@" ;;
+    help|--help|-h) usage_help ;;
+    *)
+      echo "Unknown command: $cmd" >&2
+      usage_help >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

@@ -1,18 +1,38 @@
 import { describe, it, expect, vi } from "vitest";
-import worker, { sanitizeGLSL } from "./index.js";
+
+vi.mock("cloudflare:email", () => ({
+  EmailMessage: class MockEmailMessage {
+    constructor() {}
+  },
+}));
+vi.mock("mimetext", () => ({
+  createMimeMessage: () => ({
+    setSender: () => {},
+    setRecipient: () => {},
+    setSubject: () => {},
+    addMessage: () => {},
+    asRaw: () => "MIME-raw",
+  }),
+}));
+
+import worker, { sanitizeGLSL, getLimits } from "./index.js";
 import type { Env } from "./index.js";
 
-function createMockKV(): KVNamespace {
-  const store = new Map<string, string>();
+function createMockKV(initial?: Map<string, string>): KVNamespace & { store: Map<string, string> } {
+  const store = new Map<string, string>(initial);
   return {
+    store,
     get: vi.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
     put: vi.fn((key: string, value: string) => {
       store.set(key, value);
       return Promise.resolve();
     }),
-    delete: vi.fn(() => Promise.resolve()),
+    delete: vi.fn((key: string) => {
+      store.delete(key);
+      return Promise.resolve();
+    }),
     list: vi.fn(() => Promise.resolve({ keys: [], list_complete: true })),
-  } as unknown as KVNamespace;
+  } as unknown as KVNamespace & { store: Map<string, string> };
 }
 
 function createMockAI(response: string, tokens = 100): Ai {
@@ -260,5 +280,152 @@ describe("worker", () => {
       const body = (await res.json()) as { error: string };
       expect(body.error).toBe("Not Found");
     });
+  });
+
+  describe("GET /usage", () => {
+    it("returns correct shape with hour, day, and limits", async () => {
+      const now = Date.now();
+      const hourKey = new Date(now).toISOString().slice(0, 13);
+      const dayKey = new Date(now).toISOString().slice(0, 10);
+      const kv = createMockKV(
+        new Map([
+          [`global:hour:${hourKey}`, "5000"],
+          [`global:day:${dayKey}`, "25000"],
+        ])
+      );
+      const env = createEnv({ RATE_LIMIT_KV: kv });
+      const req = new Request("http://localhost/usage");
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        hour: { key: string; globalTokens: number; limit: number };
+        day: { key: string; globalTokens: number; limit: number };
+        limits: { ipPerHour: number; globalPerHour: number; globalPerDay: number };
+      };
+      expect(body.hour).toBeDefined();
+      expect(body.hour.key).toBe(hourKey);
+      expect(body.hour.globalTokens).toBe(5000);
+      expect(typeof body.hour.limit).toBe("number");
+      expect(body.day).toBeDefined();
+      expect(body.day.key).toBe(dayKey);
+      expect(body.day.globalTokens).toBe(25000);
+      expect(typeof body.day.limit).toBe("number");
+      expect(body.limits).toBeDefined();
+      expect(typeof body.limits.ipPerHour).toBe("number");
+      expect(typeof body.limits.globalPerHour).toBe("number");
+      expect(typeof body.limits.globalPerDay).toBe("number");
+    });
+  });
+});
+
+describe("getLimits", () => {
+  it("returns env values when KV has no config:limits", async () => {
+    const env = createEnv({ IP_PER_HOUR: "5000", GLOBAL_PER_HOUR: "50000", GLOBAL_PER_DAY: "200000" });
+    const limits = await getLimits(env);
+    expect(limits.ipPerHour).toBe(5000);
+    expect(limits.globalPerHour).toBe(50000);
+    expect(limits.globalPerDay).toBe(200000);
+  });
+
+  it("returns KV overrides when config:limits exists", async () => {
+    const kv = createMockKV(new Map([["config:limits", '{"ipPerHour":1111,"globalPerHour":22222,"globalPerDay":333333}']]));
+    const env = createEnv({ RATE_LIMIT_KV: kv });
+    const limits = await getLimits(env);
+    expect(limits.ipPerHour).toBe(1111);
+    expect(limits.globalPerHour).toBe(22222);
+    expect(limits.globalPerDay).toBe(333333);
+  });
+
+  it("falls back to env for missing KV fields", async () => {
+    const kv = createMockKV(new Map([["config:limits", '{"globalPerHour":99999}']]));
+    const env = createEnv({ RATE_LIMIT_KV: kv, IP_PER_HOUR: "5000", GLOBAL_PER_DAY: "200000" });
+    const limits = await getLimits(env);
+    expect(limits.ipPerHour).toBe(5000);
+    expect(limits.globalPerHour).toBe(99999);
+    expect(limits.globalPerDay).toBe(200000);
+  });
+});
+
+describe("scheduled handler", () => {
+  it("does nothing when ALERT_EMAIL is missing", async () => {
+    const kv = createMockKV(new Map([["config:alerts", '{"email":"a@b.com","thresholdPercent":80}']]));
+    const env = createEnv({ RATE_LIMIT_KV: kv });
+    const ctx = { waitUntil: vi.fn((p: Promise<unknown>) => p) } as unknown as ExecutionContext;
+    const event = { cron: "*/15 * * * *", scheduledTime: Date.now() } as ScheduledEvent;
+    await worker.scheduled(event, env, ctx);
+    expect(ctx.waitUntil).toHaveBeenCalled();
+  });
+
+  it("sends alert when threshold exceeded and deduplicates", async () => {
+    const now = Date.now();
+    const hourKey = new Date(now).toISOString().slice(0, 13);
+    const dayKey = new Date(now).toISOString().slice(0, 10);
+    const kv = createMockKV(
+      new Map([
+        ["config:alerts", '{"email":"admin@example.com","thresholdPercent":50,"alertHour":true,"alertDay":true}'],
+        [`global:hour:${hourKey}`, "60000"],
+        [`global:day:${dayKey}`, "300000"],
+      ])
+    );
+    const mockSend = vi.fn(() => Promise.resolve({ messageId: "msg-1" }));
+    const env = createEnv({
+      RATE_LIMIT_KV: kv,
+      ALERT_EMAIL: { send: mockSend } as unknown as SendEmail,
+    });
+    const ctx = { waitUntil: vi.fn((p: Promise<unknown>) => p.then(() => {})) } as unknown as ExecutionContext;
+    const event = { cron: "*/15 * * * *", scheduledTime: now } as ScheduledEvent;
+    await worker.scheduled(event, env, ctx);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(kv.store.get(`alert:sent:hour:${hourKey}`)).toBe("1");
+    expect(kv.store.get(`alert:sent:day:${dayKey}`)).toBe("1");
+  });
+
+  it("respects per-tier config (alertDay false)", async () => {
+    const now = Date.now();
+    const hourKey = new Date(now).toISOString().slice(0, 13);
+    const dayKey = new Date(now).toISOString().slice(0, 10);
+    const kv = createMockKV(
+      new Map([
+        ["config:alerts", '{"email":"a@b.com","thresholdPercent":50,"alertHour":true,"alertDay":false}'],
+        [`global:hour:${hourKey}`, "60000"],
+        [`global:day:${dayKey}`, "300000"],
+      ])
+    );
+    const mockSend = vi.fn(() => Promise.resolve({ messageId: "msg-1" }));
+    const env = createEnv({
+      RATE_LIMIT_KV: kv,
+      ALERT_EMAIL: { send: mockSend } as unknown as SendEmail,
+    });
+    const ctx = { waitUntil: vi.fn((p: Promise<unknown>) => p.then(() => {})) } as unknown as ExecutionContext;
+    await worker.scheduled({ cron: "*/15 * * * *", scheduledTime: now } as ScheduledEvent, env, ctx);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(kv.store.get(`alert:sent:hour:${hourKey}`)).toBe("1");
+    expect(kv.store.get(`alert:sent:day:${dayKey}`)).toBeUndefined();
+  });
+
+  it("does not send when already deduplicated", async () => {
+    const now = Date.now();
+    const hourKey = new Date(now).toISOString().slice(0, 13);
+    const dayKey = new Date(now).toISOString().slice(0, 10);
+    const kv = createMockKV(
+      new Map([
+        ["config:alerts", '{"email":"a@b.com","thresholdPercent":50}'],
+        [`global:hour:${hourKey}`, "60000"],
+        [`global:day:${dayKey}`, "300000"],
+        [`alert:sent:hour:${hourKey}`, "1"],
+        [`alert:sent:day:${dayKey}`, "1"],
+      ])
+    );
+    const mockSend = vi.fn(() => Promise.resolve({ messageId: "msg-1" }));
+    const env = createEnv({
+      RATE_LIMIT_KV: kv,
+      ALERT_EMAIL: { send: mockSend } as unknown as SendEmail,
+    });
+    const ctx = { waitUntil: vi.fn((p: Promise<unknown>) => p.then(() => {})) } as unknown as ExecutionContext;
+    await worker.scheduled({ cron: "*/15 * * * *", scheduledTime: now } as ScheduledEvent, env, ctx);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,10 @@ compatibility_date = "2025-07-18"
 [ai]
 binding = "AI"
 
+# Cron trigger for threshold-based email alerts (every 15 minutes)
+[triggers]
+crons = ["*/15 * * * *"]
+
 # KV namespace for 3-tier token rate limiting (IP/hour, global/hour, global/day)
 # Production: npx wrangler kv:namespace create RATE_LIMIT_KV
 # Preview (dev): npx wrangler kv:namespace create RATE_LIMIT_KV --preview
@@ -16,3 +20,7 @@ binding = "AI"
 binding = "RATE_LIMIT_KV"
 id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 preview_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+# Email binding for rate limit threshold alerts
+[[send_email]]
+name = "ALERT_EMAIL"
