@@ -1,6 +1,6 @@
 ---
 id: til-rwze
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-24T20:00:11Z

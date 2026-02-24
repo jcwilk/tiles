@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Run npm ci from project root. Use for Cursor whitelist instead of raw npm ci.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -d "$SCRIPT_DIR/worker" ]]; then
+  ROOT_DIR="$SCRIPT_DIR"
+else
+  ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+cd "$ROOT_DIR"
+exec npm ci
