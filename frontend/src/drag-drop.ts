@@ -120,6 +120,15 @@ export function setupTileDragDrop(
     }
   }
 
+  function scheduleClickSuppression(): void {
+    const handler = (ev: MouseEvent) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      document.removeEventListener("click", handler, { capture: true });
+    };
+    document.addEventListener("click", handler, { capture: true });
+  }
+
   function handlePointerUp(e: PointerEvent): void {
     if (e.button !== 0) return;
     if (sourceId === null) return;
@@ -129,6 +138,7 @@ export function setupTileDragDrop(
       const targetId = target ? getTileId(target) : null;
       if (targetId && targetId !== sourceId) {
         callbacks.onMergeRequest(sourceId, targetId);
+        scheduleClickSuppression();
       }
       setDropTarget(null);
       suppressNextClick = true;
