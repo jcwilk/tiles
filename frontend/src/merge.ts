@@ -63,13 +63,22 @@ export async function performMerge(
       });
 
       if (result.success) {
-        const shader: ShaderObject = {
-          id: crypto.randomUUID(),
-          name: `Merge: ${sourceShader.name} + ${targetShader.name}`,
-          vertexSource: DEFAULT_VERTEX,
-          fragmentSource,
-          createdAt: Date.now(),
-        };
+        const isEdit = sourceShader.id === targetShader.id;
+        const shader: ShaderObject = isEdit
+          ? {
+              id: sourceShader.id,
+              name: sourceShader.name,
+              vertexSource: DEFAULT_VERTEX,
+              fragmentSource,
+              createdAt: sourceShader.createdAt,
+            }
+          : {
+              id: crypto.randomUUID(),
+              name: `Merge: ${sourceShader.name} + ${targetShader.name}`,
+              vertexSource: DEFAULT_VERTEX,
+              fragmentSource,
+              createdAt: Date.now(),
+            };
         await storage.add(shader);
         return { success: true, shader };
       }

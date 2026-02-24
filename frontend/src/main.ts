@@ -50,12 +50,17 @@ function renderGrid(shaders: ShaderObject[]): void {
       const targetEl = target.element;
       if (!grid || !targetEl) return;
 
+      const isEdit = sourceId === targetId;
       const loadingTile = createLoadingTile();
-      const insertBefore = targetEl.nextElementSibling;
-      if (insertBefore) {
-        grid.insertBefore(loadingTile, insertBefore);
+      if (isEdit) {
+        targetEl.replaceWith(loadingTile);
       } else {
-        grid.appendChild(loadingTile);
+        const insertBefore = targetEl.nextElementSibling;
+        if (insertBefore) {
+          grid.insertBefore(loadingTile, insertBefore);
+        } else {
+          grid.appendChild(loadingTile);
+        }
       }
 
       teardownDragDrop?.();
@@ -65,44 +70,62 @@ function renderGrid(shaders: ShaderObject[]): void {
       });
 
       const result = await performMerge(source.shader, target.shader, store);
-      loadingTile.remove();
 
       if (result.success && result.shader) {
         const newTile = createTile(result.shader);
         newTile.element.classList.add("tile-merge-appear");
         newTile.element.addEventListener("click", () => openFullscreen(newTile));
 
-        const insertBefore = targetEl.nextElementSibling;
-        if (insertBefore) {
-          grid.insertBefore(newTile.element, insertBefore);
-        } else {
-          grid.appendChild(newTile.element);
-        }
-
         const targetIdx = currentTiles.findIndex((t) => t.shader.id === targetId);
-        const updatedTiles = [
-          ...currentTiles.slice(0, targetIdx + 1),
-          newTile,
-          ...currentTiles.slice(targetIdx + 1),
-        ];
-        tiles = updatedTiles;
+
+        if (isEdit) {
+          // Edit: replace loading with updated tile in place
+          disposeTile(target);
+          loadingTile.replaceWith(newTile.element);
+          const updatedTiles = [
+            ...currentTiles.slice(0, targetIdx),
+            newTile,
+            ...currentTiles.slice(targetIdx + 1),
+          ];
+          tiles = updatedTiles;
+        } else {
+          // Merge: remove loading, insert new tile after target
+          loadingTile.remove();
+          const insertBefore = targetEl.nextElementSibling;
+          if (insertBefore) {
+            grid.insertBefore(newTile.element, insertBefore);
+          } else {
+            grid.appendChild(newTile.element);
+          }
+          const updatedTiles = [
+            ...currentTiles.slice(0, targetIdx + 1),
+            newTile,
+            ...currentTiles.slice(targetIdx + 1),
+          ];
+          tiles = updatedTiles;
+
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              playMergeConnectionAnimation(
+                source.element,
+                target.element,
+                newTile.element
+              );
+            });
+          });
+        }
 
         teardownDragDrop?.();
         const allEls = Array.from(grid.querySelectorAll(".tile"));
         teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
-          onMergeRequest: makeMergeHandler(updatedTiles),
-        });
-
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            playMergeConnectionAnimation(
-              source.element,
-              target.element,
-              newTile.element
-            );
-          });
+          onMergeRequest: makeMergeHandler(tiles),
         });
       } else {
+        if (isEdit) {
+          loadingTile.replaceWith(targetEl);
+        } else {
+          loadingTile.remove();
+        }
         teardownDragDrop?.();
         const remaining = Array.from(grid.querySelectorAll(".tile"));
         teardownDragDrop = setupTileDragDrop(remaining as HTMLElement[], {

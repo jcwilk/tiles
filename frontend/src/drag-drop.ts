@@ -72,7 +72,7 @@ export function setupTileDragDrop(
   function setDropTarget(target: HTMLElement | null): void {
     tileElements.forEach((el) => {
       const id = el.getAttribute("data-shader-id");
-      if (id === sourceId || id === "loading") return;
+      if (id === "loading") return;
       el.classList.toggle("tile-drop-target", el === target);
     });
     const newTargetId = target ? getTileId(target) : null;
@@ -112,7 +112,7 @@ export function setupTileDragDrop(
     if (isDragging) {
       updateDragPreview(e.clientX, e.clientY);
       const target = findTileAt(e.clientX, e.clientY);
-      if (target && getTileId(target) !== sourceId) {
+      if (target) {
         setDropTarget(target);
       } else {
         setDropTarget(null);
@@ -135,8 +135,21 @@ export function setupTileDragDrop(
 
     if (isDragging) {
       const target = findTileAt(e.clientX, e.clientY);
-      const targetId = target ? getTileId(target) : null;
-      if (targetId && targetId !== sourceId) {
+      let targetId = target ? getTileId(target) : null;
+      // When dropping on self, the source has pointer-events: none so findTileAt may miss it.
+      // Fall back to checking if the drop position is within the source tile's bounds.
+      if (!targetId && sourceTile) {
+        const rect = sourceTile.getBoundingClientRect();
+        if (
+          e.clientX >= rect.left &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom
+        ) {
+          targetId = sourceId;
+        }
+      }
+      if (targetId) {
         callbacks.onMergeRequest(sourceId, targetId);
         scheduleClickSuppression();
       }
