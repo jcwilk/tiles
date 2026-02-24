@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# TypeScript check (tsc --noEmit) for frontend and worker.
+# Invokes tsc directly via node_modules/.bin/tsc (no npm).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When run via ./lint symlink, SCRIPT_DIR is project root; when run as scripts/lint, SCRIPT_DIR is scripts/
+if [[ -d "$SCRIPT_DIR/worker" ]]; then
+  ROOT_DIR="$SCRIPT_DIR"
+else
+  ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+TSC="$ROOT_DIR/node_modules/.bin/tsc"
+[[ -x "$TSC" ]] || { echo "Error: tsc not found at $TSC" >&2; exit 1; }
+
+cd "$ROOT_DIR"
+"$TSC" --noEmit -p frontend
+"$TSC" --noEmit -p worker
