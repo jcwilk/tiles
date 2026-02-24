@@ -180,17 +180,39 @@ export async function processAudioBlob(
   }
 }
 
-export async function performAddFromVoice(storage: ShaderStorage): Promise<AddFromVoiceResult> {
-  try {
-    const { promise } = recordAudio();
-    const blob = await promise;
-    return processAudioBlob(blob, storage);
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("Permission")) {
-      showToast("Microphone access denied. Please allow microphone to add tiles by voice.");
-    } else {
-      showToast(err instanceof Error ? err.message : "Recording failed");
-    }
-    return { success: false };
-  }
+export interface AddFromVoiceSession {
+  promise: Promise<AddFromVoiceResult>;
+  stop: () => void;
+}
+
+export interface AddFromVoiceOptions {
+  /** Called when recording stops (before transcription). Use to show "Processing…" UI. */
+  onRecordingEnded?: () => void;
+}
+
+/**
+ * Start add-from-voice: record audio, then transcribe and generate.
+ * Returns { promise, stop } so the caller can stop recording early (tap-to-stop).
+ * Call stop() before starting a new recording to avoid double-recording errors.
+ */
+export function performAddFromVoice(
+  storage: ShaderStorage,
+  options?: AddFromVoiceOptions
+): AddFromVoiceSession {
+  const { promise: blobPromise, stop } = recordAudio();
+  const promise = blobPromise
+    .then((blob) => {
+      options?.onRecordingEnded?.();
+      return processAudioBlob(blob, storage);
+    })
+    .catch((err) => {
+      options?.onRecordingEnded?.();
+      if (err instanceof Error && err.message.includes("Permission")) {
+        showToast("Microphone access denied. Please allow microphone to add tiles by voice.");
+      } else {
+        showToast(err instanceof Error ? err.message : "Recording failed");
+      }
+      return { success: false };
+    });
+  return { promise, stop };
 }

@@ -3,7 +3,7 @@
  * Per CONVENTIONS.md: Use [VALID CODE] / [INVALID CODE] placeholders.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { processAudioBlob } from "./add-from-voice.js";
+import { processAudioBlob, performAddFromVoice } from "./add-from-voice.js";
 import { createInMemoryStorage } from "./storage.js";
 import { VALID_CODE, INVALID_CODE } from "./test-harness.js";
 
@@ -124,6 +124,58 @@ describe("processAudioBlob", () => {
     expect(result.success).toBe(true);
     expect(result.shader).toBeDefined();
     expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns session with promise and stop for tap-to-stop", async () => {
+    const mockStream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    let ondataavailable: ((e: { data: Blob }) => void) | null = null;
+    let onstop: (() => void) | null = null;
+    const mockRecorder = {
+      state: "recording",
+      start: vi.fn(),
+      stop: vi.fn(() => {
+        mockRecorder.state = "inactive";
+        ondataavailable?.({ data: new Blob(["x"]) });
+        onstop?.();
+      }),
+      get ondataavailable() {
+        return ondataavailable;
+      },
+      set ondataavailable(fn: (e: { data: Blob }) => void) {
+        ondataavailable = fn;
+      },
+      get onstop() {
+        return onstop;
+      },
+      set onstop(fn: () => void) {
+        onstop = fn;
+      },
+      onerror: null as (() => void) | null,
+    };
+    vi.stubGlobal("MediaRecorder", vi.fn(() => mockRecorder));
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn().mockResolvedValue(mockStream),
+      },
+    });
+
+    globalThis.fetch = createMockFetchForAddFromVoice("test", VALID_CODE) as unknown as typeof fetch;
+
+    const storage = createInMemoryStorage();
+    const session = performAddFromVoice(storage);
+
+    expect(session).toHaveProperty("promise");
+    expect(session).toHaveProperty("stop");
+    expect(typeof session.stop).toBe("function");
+
+    await new Promise((r) => setTimeout(r, 0));
+    session.stop();
+    const result = await session.promise;
+    expect(result).toHaveProperty("success");
+
+    vi.unstubAllGlobals();
   });
 
   it("shows toast when transcribe API fails", async () => {

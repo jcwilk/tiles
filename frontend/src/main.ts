@@ -176,19 +176,42 @@ function createAddTileButton(): HTMLElement {
   btn.setAttribute("aria-label", "Add new tile with voice");
   btn.innerHTML = '<span class="tile-add-icon">+</span><span class="tile-add-label">Add tile</span>';
 
+  let currentStop: (() => void) | null = null;
+
   btn.addEventListener("click", async () => {
     if (!storage) return;
 
-    btn.disabled = true;
-    btn.classList.add("tile-add-loading");
+    // Tap-to-stop: if already recording/processing, stop and do not start new
+    if (currentStop) {
+      currentStop();
+      return;
+    }
+
     const label = btn.querySelector(".tile-add-label");
-    if (label) label.textContent = "Recording…";
+    const icon = btn.querySelector(".tile-add-icon");
 
-    const result = await performAddFromVoice(storage);
+    // Recording phase: show tap-to-stop, keep clickable
+    btn.classList.add("tile-add-recording");
+    if (label) label.textContent = "Tap to stop";
+    if (icon) icon.textContent = "●";
 
-    btn.disabled = false;
-    btn.classList.remove("tile-add-loading");
-    if (label) label.textContent = "Add tile";
+    const { promise, stop } = performAddFromVoice(storage, {
+      onRecordingEnded: () => {
+        // Processing phase: disable interaction, show processing state
+        btn.classList.add("tile-add-loading");
+        btn.disabled = true;
+        if (label) label.textContent = "Processing…";
+      },
+    });
+    currentStop = stop;
+
+    const result = await promise.finally(() => {
+      currentStop = null;
+      btn.classList.remove("tile-add-recording", "tile-add-loading");
+      btn.disabled = false;
+      if (label) label.textContent = "Add tile";
+      if (icon) icon.textContent = "+";
+    });
 
     if (result.success && result.shader) {
       const grid = btn.parentElement;

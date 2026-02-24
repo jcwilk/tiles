@@ -214,6 +214,26 @@ body {
   opacity: 0.8;
 }
 
+.tile-add-new.tile-add-recording {
+  border-color: rgba(220, 80, 80, 0.8);
+  background: rgba(220, 80, 80, 0.15);
+  animation: tile-add-recording-pulse 1.5s ease-in-out infinite;
+}
+
+.tile-add-new.tile-add-recording .tile-add-icon {
+  color: rgba(255, 100, 100, 0.95);
+}
+
+@keyframes tile-add-recording-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 80, 80, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(220, 80, 80, 0);
+  }
+}
+
 .tile-add-new.tile-add-loading {
   pointer-events: none;
 }
