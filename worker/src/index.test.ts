@@ -15,6 +15,7 @@ vi.mock("mimetext", () => ({
   }),
 }));
 
+import models from "../models.json";
 import worker, { sanitizeGLSL, getLimits } from "./index.js";
 import type { Env } from "./index.js";
 
@@ -35,12 +36,10 @@ function createMockKV(initial?: Map<string, string>): KVNamespace & { store: Map
   } as unknown as KVNamespace & { store: Map<string, string> };
 }
 
-const WHISPER_MODEL = "@cf/openai/whisper";
-
 function createMockAI(response: string, tokens = 100): Ai {
   return {
     run: vi.fn((model: string) => {
-      if (model === WHISPER_MODEL) {
+      if (model === models.whisper.id) {
         return Promise.resolve({ text: "transcribed shader description" });
       }
       return Promise.resolve({
@@ -313,7 +312,7 @@ describe("worker", () => {
       const body = (await res.json()) as { text: string };
       expect(body.text).toBe("transcribed shader description");
       expect(env.AI.run).toHaveBeenCalledWith(
-        WHISPER_MODEL,
+        models.whisper.id,
         expect.objectContaining({ audio: expect.any(Array) })
       );
     });

@@ -3,8 +3,11 @@
  * Proxies LLM requests with CORS and rate limiting.
  */
 
-const MODEL = "@cf/meta/llama-3.1-8b-instruct-awq" as const;
-const WHISPER_MODEL = "@cf/openai/whisper" as const;
+import type { AiModels } from "@cloudflare/workers-types";
+import models from "../models.json";
+
+const TEXT_MODEL = models.text.id as keyof AiModels;
+const WHISPER_MODEL = models.whisper.id as keyof AiModels;
 
 /** Allowed origins: GitHub Pages (*.github.io) and localhost for dev */
 const ALLOWED_ORIGIN_PATTERNS = [
@@ -214,7 +217,7 @@ async function handleGenerateFromPrompt(
   const userPrompt = buildGenerateFromPromptUserMessage(prompt.trim(), previousError);
 
   try {
-    const response = await env.AI.run(MODEL, {
+    const response = await env.AI.run(TEXT_MODEL, {
       messages: [
         {
           role: "system",
@@ -229,7 +232,7 @@ Required format:
         },
         { role: "user", content: userPrompt },
       ],
-      max_tokens: 1024,
+      max_tokens: models.text.maxTokens,
     });
 
     const result = response as {
@@ -375,7 +378,7 @@ async function handleGenerate(
   const prompt = buildMergePrompt(fragmentA, fragmentB, typeof previousError === "string" ? previousError : undefined);
 
   try {
-    const response = await env.AI.run(MODEL, {
+    const response = await env.AI.run(TEXT_MODEL, {
       messages: [
         {
           role: "system",
@@ -390,7 +393,7 @@ Required format:
         },
         { role: "user", content: prompt },
       ],
-      max_tokens: 1024,
+      max_tokens: models.text.maxTokens,
     });
 
     const result = response as { response?: string; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };

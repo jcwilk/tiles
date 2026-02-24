@@ -1,0 +1,9 @@
+{
+  "text": {
+    "id": "@cf/meta/llama-3.1-8b-instruct-awq",
+    "maxTokens": 1024
+  },
+  "whisper": {
+    "id": "@cf/openai/whisper"
+  }
+}
