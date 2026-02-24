@@ -1,1 +1,1 @@
-scripts/ratelimit
+scripts/rl.ts

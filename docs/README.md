@@ -8,7 +8,7 @@ This directory contains domain-specific knowledge and topic-specific deep dives.
 - *(Future Link)*: WebGL Sandbox & Backbuffer implementation details.
 - [Prompt Evaluation Tooling — Research Decision](prompt-eval-decision.md)
 - *(Future Link)*: AI Prompts and LLM Code Generation Strategy.
-- *(Future Link)*: Rate Limiting & Cloudflare Security Constraints.
+- [Rate Limiting & Cloudflare Security Constraints](rate-limiting.md) — Rate limits, KV config, alerts, and cost monitoring.
 
 ---
 
