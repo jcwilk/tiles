@@ -1,0 +1,6 @@
+name = "tiles-worker"
+main = "src/index.ts"
+compatibility_date = "2025-07-18"
+
+# Local dev runs on port 8787 by default
+# Frontend should use VITE_API_URL=http://localhost:8787 when developing locally

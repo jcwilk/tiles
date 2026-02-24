@@ -36,8 +36,8 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
 - `./tk help`: Show ticket system help.
 - `./tk ready`: Show tasks ready to be worked on.
 - `./tk show <id>`: Show details of a specific ticket.
-- `npm run dev`: (To be created) Run local Vite server and Wrangler worker proxy.
-- `npm test`: (To be created) Run full-stack test suite.
+- `npm run dev`: Run local Vite server and Wrangler worker proxy (frontend + worker).
+- `npm test`: Run full-stack test suite (Vitest in frontend and worker).
 
 ---
 
