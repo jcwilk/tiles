@@ -24,6 +24,7 @@ Welcome, agent. You are working on the **Tiles** project. This file serves as yo
     - Run `./tk ready` to identify the highest priority available task.
     - Run `./tk start <id>` to mark the ticket as in-progress.
     - Run `./tk show <id>` to orient yourself to the requirements and design.
+    - After closing a ticket, commit and push changes before picking up the next task.
 2.  **Discovery**: Explore the codebase, root documentation, and `docs/` to understand the context.
 3.  **Strategy**: Propose a plan before execution.
 4.  **Execution**:
