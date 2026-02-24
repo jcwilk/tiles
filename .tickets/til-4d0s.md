@@ -1,6 +1,6 @@
 ---
 id: til-4d0s
-status: open
+status: closed
 deps: []
 links: [til-b0gp]
 created: 2026-02-24T10:02:46Z

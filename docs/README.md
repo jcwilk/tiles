@@ -2,6 +2,7 @@
 
 This directory contains domain-specific knowledge and topic-specific deep dives.
 
+- [Deploy Troubleshooting](deploy-troubleshooting.md) — Cloudflare Worker deploy failure causes and fixes.
 - [GitHub Pages Setup](github-pages-setup.md) — One-time manual configuration for Pages source.
 - [Merge Test Coverage Gaps](merge-test-gaps.md) — Investigation of why merge failures in production are not caught by tests (til-s37z).
 - *(Future Link)*: WebGL Sandbox & Backbuffer implementation details.

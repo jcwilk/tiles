@@ -1,6 +1,6 @@
 name = "tiles-worker"
 main = "src/index.ts"
-compatibility_date = "2025-07-18"
+compatibility_date = "2025-02-24"
 compatibility_flags = ["nodejs_compat"]
 
 # Local dev runs on port 8787 by default
@@ -17,9 +17,10 @@ crons = ["*/15 * * * *"]
 # KV namespace for 3-tier token rate limiting (IP/hour, global/hour, global/day)
 # Production: npx wrangler kv:namespace create RATE_LIMIT_KV
 # Preview (dev): npx wrangler kv:namespace create RATE_LIMIT_KV --preview
+# Production id injected by CI from CLOUDFLARE_RATE_LIMIT_KV_ID secret
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "1c494aa12fca44cd858e4fa2d443ca6d"
+id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 preview_id = "c89b80a40a204479835125e0ee9518e9"
 
 # Email binding for rate limit threshold alerts
