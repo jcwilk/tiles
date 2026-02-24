@@ -111,6 +111,20 @@ describe("performMerge", () => {
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining("Rate limit"));
   });
 
+  it("shows toast and returns failure when fetch throws (e.g. Failed to fetch)", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("Failed to fetch"));
+
+    const storage = createInMemoryStorage();
+    const result = await performMerge(MOCK_SHADER, MOCK_SHADER_B, storage);
+
+    expect(result.success).toBe(false);
+    expect(result.shader).toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    const { showToast } = await import("./toast.js");
+    expect(showToast).toHaveBeenCalledWith("Merge failed: Failed to fetch");
+  });
+
   it("saved shader has correct structure and state", async () => {
     globalThis.fetch = createMockFetchHarness({ response: VALID_CODE });
 
