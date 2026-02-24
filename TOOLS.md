@@ -10,6 +10,7 @@ Run from project root. Symlinks point to `scripts/`.
 |---------|---------|
 | `./tk` | Ticket system with dependency tracking. Create, start, close, and manage tickets in `.tickets/`. Run `./tk help` for full usage. Key commands: `ready`, `blocked`, `closed`, `show <id>`, `create`, `dep tree <id>`, `dep cycle`. |
 | `./rl` | Rate limit CLI. Usage, limits, and alerts. Uses Wrangler KV and `GET /usage` from the worker. Requires worker running. `RATE_LIMIT_API_URL` (default: http://localhost:8787). Run `./rl help` for subcommands. |
+| `./srv` | Server status and management. Check local/remote endpoints (`status`, `status local`, `status remote`), start/stop/restart dev servers. `VITE_DEV_URL`, `WORKER_DEV_URL` for local; `SRV_REMOTE_FRONTEND_URL`, `SRV_REMOTE_WORKER_URL` for remote. Run `./srv help` for usage. |
 | `./lint` | TypeScript check (`tsc --noEmit`) for frontend and worker. Invokes tsc directly (no npm). |
 
 ## npm Scripts (root)
