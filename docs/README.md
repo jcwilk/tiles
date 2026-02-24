@@ -30,6 +30,10 @@ Prompt eval tests validate AI-generated GLSL against fixtures. They are **gated*
 
 Fixtures live in `worker/src/__fixtures__/` as JSON: `gradient-plasma.json`, `noise-circles.json`, `stripes-rainbow.json`. Each contains `inputHash`, `fragmentA`, `fragmentB`, `previousError`, `output`, and `recordedAt`.
 
+### E2E merge verification
+
+Run `npm run test:e2e -w frontend` to verify the full merge flow via browser automation. Requires dev server and worker running. If the frontend uses a non-default port, set `PLAYWRIGHT_BASE_URL` (e.g. `PLAYWRIGHT_BASE_URL=http://localhost:5178`).
+
 ---
 
 *Last Updated: 2026-02-23*

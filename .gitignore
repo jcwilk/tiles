@@ -14,3 +14,7 @@ dist/
 # IDE and OS
 .DS_Store
 *.log
+
+# Playwright
+test-results/
+playwright-report/
