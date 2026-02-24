@@ -94,7 +94,10 @@ function makeMergeHandler(currentTiles: TileElement[]) {
           onDelete: () => removeTile(newTile),
         });
         newTile.element.classList.add("tile-merge-appear");
-        newTile.element.addEventListener("click", () => openFullscreen(newTile));
+        newTile.element.addEventListener("click", (e) => {
+          if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+          openFullscreen(newTile);
+        });
 
         const targetIdx = currentTiles.findIndex((t) => t.shader.id === targetId);
 
@@ -155,7 +158,10 @@ function renderGrid(shaders: ShaderObject[]): void {
     const tile = createTile(shader, isBuiltInTile(shader) ? {} : { onDelete: () => removeTile(tile) });
     grid.appendChild(tile.element);
 
-    tile.element.addEventListener("click", () => openFullscreen(tile));
+    tile.element.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+      openFullscreen(tile);
+    });
     return tile;
   });
 
