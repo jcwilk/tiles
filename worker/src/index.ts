@@ -136,7 +136,14 @@ async function handleGenerate(
       messages: [
         {
           role: "system",
-          content: `You are an expert GLSL shader programmer. You combine fragment shaders into new, creative WebGL shaders. Output ONLY valid GLSL fragment shader code. Use the standard API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;`,
+          content: `You are an expert GLSL shader programmer. You combine fragment shaders into new, creative WebGL shaders.
+
+CRITICAL: Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
+Required format:
+- First line: #version 300 es
+- Second line: precision highp float;
+- Required API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
+- End with your main() and fragColor assignment.`,
         },
         { role: "user", content: prompt },
       ],
@@ -150,9 +157,11 @@ async function handleGenerate(
 
     await incrementRateLimits(env.RATE_LIMIT_KV, ip, tokensUsed);
 
+    const fragmentSource = sanitizeGLSL(generated);
+
     return jsonResponse(
       {
-        fragmentSource: generated.trim(),
+        fragmentSource,
         tokensUsed,
       },
       200,
@@ -168,8 +177,15 @@ async function handleGenerate(
   }
 }
 
-function buildMergePrompt(fragmentA: string, fragmentB: string, previousError?: string): string {
-  let base = `Merge these two GLSL fragment shaders into one new shader that creatively combines their visual effects. Output ONLY the new fragment shader code, no explanations.
+/** Exported for prompt eval hash computation (staleness detection) */
+export function buildMergePrompt(fragmentA: string, fragmentB: string, previousError?: string): string {
+  let base = `Merge these two GLSL fragment shaders into one new shader that creatively combines their visual effects.
+
+Output raw GLSL only. Start with:
+#version 300 es
+precision highp float;
+
+Use: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
 
 Shader A:
 \`\`\`glsl
@@ -182,10 +198,53 @@ ${fragmentB}
 \`\`\`
 `;
   if (previousError) {
-    base += `\nThe previous attempt failed to compile with this error. Fix it and output corrected GLSL:\n\`\`\`\n${previousError}\n\`\`\`\n\n`;
+    base += `\nThe previous attempt failed to compile. Fix the error and output corrected GLSL (raw code only, no markdown):\n${previousError}\n\n`;
   }
-  base += `Output the merged fragment shader:`;
+  base += `Output the merged fragment shader (raw GLSL, no \`\`\` fences):`;
   return base;
+}
+
+/** Test placeholders (CONVENTIONS.md) - pass through unchanged */
+const VALID_PLACEHOLDER = "[VALID CODE]";
+const INVALID_PLACEHOLDER = "[INVALID CODE]";
+
+/**
+ * Sanitize AI-generated GLSL: strip markdown fences, extract code block,
+ * ensure #version 300 es and precision highp float.
+ */
+export function sanitizeGLSL(raw: string): string {
+  const t = raw.trim();
+  if (t === VALID_PLACEHOLDER || t === INVALID_PLACEHOLDER) return t;
+
+  let code = t;
+
+  // Strip markdown code fences (```glsl ... ``` or ``` ... ```)
+  const fenceMatch = code.match(/^```(?:glsl)?\s*\n?([\s\S]*?)\n?```\s*$/m);
+  if (fenceMatch) {
+    code = fenceMatch[1].trim();
+  } else {
+    // Strip leading/trailing fences that might be split
+    code = code.replace(/^```(?:glsl)?\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
+  }
+
+  // Strip any prose before first #version or valid GLSL start
+  const versionIdx = code.indexOf("#version");
+  if (versionIdx > 0) {
+    code = code.slice(versionIdx);
+  }
+
+  // Ensure #version 300 es (strip any other #version if prepending)
+  if (!/^#version\s+300\s+es/im.test(code)) {
+    code = code.replace(/^#version\s+\d+\s+\w+\s*\n?/im, "");
+    code = "#version 300 es\n" + code.trim();
+  }
+
+  // Ensure precision highp float after #version
+  if (!/precision\s+(lowp|mediump|highp)\s+float/im.test(code)) {
+    code = code.replace(/^(#version\s+300\s+es\s*\n?)/i, "$1precision highp float;\n");
+  }
+
+  return code.trim();
 }
 
 function estimateTokens(text: string): number {

@@ -3,6 +3,14 @@
  * Per ARCHITECTURE.md: up to 3 attempts with compiler error feedback.
  */
 import { generateMerge } from "./api.js";
+
+/** Defensive strip of markdown fences if worker returns unsanitized output */
+function stripMarkdownFences(raw: string): string {
+  let s = raw.trim();
+  const m = s.match(/^```(?:glsl)?\s*\n?([\s\S]*?)\n?```\s*$/m);
+  if (m) return m[1].trim();
+  return s.replace(/^```(?:glsl)?\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
+}
 import { createShaderEngine } from "./shader-engine.js";
 import { showToast } from "./toast.js";
 import type { ShaderObject } from "./types.js";
@@ -44,7 +52,8 @@ export async function performMerge(
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const { fragmentSource } = await generateMerge(fragmentA, fragmentB, previousError);
+      const { fragmentSource: raw } = await generateMerge(fragmentA, fragmentB, previousError);
+      const fragmentSource = stripMarkdownFences(raw);
 
       const canvas = createTempCanvas();
       const result = createShaderEngine({

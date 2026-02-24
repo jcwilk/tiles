@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import worker from "./index.js";
+import worker, { sanitizeGLSL } from "./index.js";
 import type { Env } from "./index.js";
 
 function createMockKV(): KVNamespace {
@@ -33,6 +33,50 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     ...overrides,
   };
 }
+
+describe("sanitizeGLSL", () => {
+  it("strips markdown fences and extracts GLSL", () => {
+    const input = "```glsl\n#version 300 es\nprecision highp float;\nvoid main(){}\n```";
+    expect(sanitizeGLSL(input)).toContain("#version 300 es");
+    expect(sanitizeGLSL(input)).toContain("void main(){}");
+    expect(sanitizeGLSL(input)).not.toContain("```");
+  });
+
+  it("prepends #version 300 es when missing", () => {
+    const input = "precision highp float;\nvoid main(){ fragColor=vec4(1); }";
+    const out = sanitizeGLSL(input);
+    expect(out).toMatch(/^#version\s+300\s+es/);
+    expect(out).toContain("void main()");
+  });
+
+  it("inserts precision highp float when missing", () => {
+    const input = "#version 300 es\nvoid main(){ fragColor=vec4(1); }";
+    const out = sanitizeGLSL(input);
+    expect(out).toContain("precision highp float;");
+    expect(out).toContain("void main()");
+  });
+
+  it("leaves clean input unchanged", () => {
+    const input = `#version 300 es
+precision highp float;
+uniform float u_time;
+void main(){ fragColor=vec4(1); }`;
+    const out = sanitizeGLSL(input);
+    expect(out).toBe(input);
+  });
+
+  it("strips prose before #version", () => {
+    const input = "Here is the shader:\n\n#version 300 es\nprecision highp float;\nvoid main(){}";
+    const out = sanitizeGLSL(input);
+    expect(out).toMatch(/^#version\s+300\s+es/);
+    expect(out).not.toContain("Here is the shader");
+  });
+
+  it("passes through test placeholders unchanged", () => {
+    expect(sanitizeGLSL("[VALID CODE]")).toBe("[VALID CODE]");
+    expect(sanitizeGLSL("[INVALID CODE]")).toBe("[INVALID CODE]");
+  });
+});
 
 describe("worker", () => {
   it("smoke test", () => {
