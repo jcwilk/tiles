@@ -2,7 +2,7 @@
 id: til-b0gp
 status: closed
 deps: []
-links: []
+links: [til-4d0s]
 created: 2026-02-24T09:24:58Z
 type: chore
 priority: 2
