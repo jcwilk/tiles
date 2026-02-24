@@ -58,6 +58,13 @@ npm run build
 - `frontend/` — Vite + TypeScript web app (GitHub Pages)
 - `worker/` — Cloudflare Worker AI proxy (Wrangler)
 
+### Workers AI Local Auth
+
+Workers AI connects to Cloudflare's remote API even in local dev. Log in with `npx wrangler login`. If you still get "Not logged in" or "Failed to fetch auth token", use an API token instead:
+
+1. Create an API token at [Cloudflare Dashboard → Profile → API Tokens](https://dash.cloudflare.com/profile/api-tokens) (use "Edit Cloudflare Workers" template).
+2. Run: `CLOUDFLARE_API_TOKEN=your-token npm run dev`
+
 ### Worker Deployment
 
 Before deploying the worker to Cloudflare, create a KV namespace for rate limiting:
