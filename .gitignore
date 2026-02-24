@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.wrangler/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# IDE and OS
+.DS_Store
+*.log

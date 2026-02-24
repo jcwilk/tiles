@@ -1,0 +1,13 @@
+---
+description: Global project rules and entry point for all agent instructions.
+globs:
+alwaysApply: true
+---
+
+# Global Project Rules
+
+Welcome, agent. This project is governed by the instructions in [AGENTS.md](../../AGENTS.md).
+
+## Primary Mandate
+
+**You MUST read and follow the instructions in `AGENTS.md` before proceeding with any task.**
