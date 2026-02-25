@@ -405,6 +405,19 @@ describe("worker", () => {
       expect(res.status).toBe(403);
     });
 
+    it("rejects invalid JSON body", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: "not json",
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Invalid JSON");
+    });
+
     it("rejects missing or invalid fragmentSource", async () => {
       const env = createEnv();
       const req = new Request("http://localhost/suggest", {
@@ -488,6 +501,38 @@ describe("worker", () => {
         );
       }
     });
+
+    it("returns 429 when rate limit exceeded", async () => {
+      const now = Date.now();
+      const hourKey = new Date(now).toISOString().slice(0, 13);
+      const kv = createMockKV(
+        new Map([[`ip:1.2.3.4:${hourKey}`, "999999"]])
+      );
+      const env = createEnv({
+        RATE_LIMIT_KV: kv,
+        IP_PER_HOUR: "1000",
+        GLOBAL_PER_HOUR: "100000",
+        GLOBAL_PER_DAY: "500000",
+      });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(429);
+      const body = (await res.json()) as { error: string; retryAfter?: number };
+      expect(body.error).toContain("Rate limit exceeded");
+      expect(body.retryAfter).toBeDefined();
+      expect(env.AI.run).not.toHaveBeenCalled();
+    });
   });
 
   describe("POST /apply-directive", () => {
@@ -503,6 +548,19 @@ describe("worker", () => {
       });
       const res = await worker.fetch(req, env, {} as ExecutionContext);
       expect(res.status).toBe(403);
+    });
+
+    it("rejects invalid JSON body", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: "not json",
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Invalid JSON");
     });
 
     it("rejects missing fragmentSource or directive", async () => {
@@ -600,6 +658,38 @@ describe("worker", () => {
           ]),
         })
       );
+    });
+
+    it("returns 429 when rate limit exceeded", async () => {
+      const now = Date.now();
+      const hourKey = new Date(now).toISOString().slice(0, 13);
+      const kv = createMockKV(
+        new Map([[`ip:1.2.3.4:${hourKey}`, "999999"]])
+      );
+      const env = createEnv({
+        RATE_LIMIT_KV: kv,
+        IP_PER_HOUR: "1000",
+        GLOBAL_PER_HOUR: "100000",
+        GLOBAL_PER_DAY: "500000",
+      });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          directive: "add a pulsing effect",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(429);
+      const body = (await res.json()) as { error: string; retryAfter?: number };
+      expect(body.error).toContain("Rate limit exceeded");
+      expect(body.retryAfter).toBeDefined();
+      expect(env.AI.run).not.toHaveBeenCalled();
     });
   });
 
