@@ -1,6 +1,6 @@
 ---
 id: til-rdp6
-status: open
+status: closed
 deps: [til-u952]
 links: []
 created: 2026-02-24T19:54:29Z

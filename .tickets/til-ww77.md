@@ -1,6 +1,6 @@
 ---
 id: til-ww77
-status: open
+status: closed
 deps: [til-a78e]
 links: []
 created: 2026-02-24T19:54:12Z

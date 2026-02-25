@@ -1,12 +1,18 @@
 #!/usr/bin/env -S npx tsx
 /**
- * Rate limit monitoring CLI: usage, limits, alerts
+ * Rate limit monitoring CLI: usage, limits, alerts, cost
  * Uses wrangler KV and GET /usage from the worker.
  */
 
 import { spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import {
+  neuronsToCost,
+  tokensToNeurons,
+  fetchModelPricing,
+  FREE_NEURONS_PER_DAY,
+} from "./cost";
 
 const SCRIPT_DIR = __dirname;
 const ROOT_DIR = fs.existsSync(path.join(SCRIPT_DIR, "worker"))
@@ -86,8 +92,8 @@ Examples:
 
 Environment:
   RATE_LIMIT_API_URL  Base URL for worker (default: http://localhost:8787)
-  CLOUDFLARE_API_TOKEN   Cloudflare API token (for cost actual spend)
-  CLOUDFLARE_ACCOUNT_ID  Cloudflare account ID (for cost actual spend)`);
+  CLOUDFLARE_API_TOKEN, CF_API_TOKEN   Cloudflare API token (for cost actual spend)
+  CLOUDFLARE_ACCOUNT_ID, CF_ACCOUNT_ID  Cloudflare account ID (for cost actual spend)`);
 }
 
 function usageUsageHelp(): void {
@@ -131,34 +137,9 @@ function costHelp(): void {
   console.log(`Usage: ./rl cost
 
 Shows three sections:
-  (1) Actual Spend   From Cloudflare GraphQL API (requires CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)
-  (2) Estimated      From worker /usage tokens, converted via model pricing
+  (1) Actual Spend   From Cloudflare GraphQL API (requires CLOUDFLARE_API_TOKEN/CF_API_TOKEN, CLOUDFLARE_ACCOUNT_ID/CF_ACCOUNT_ID)
+  (2) Estimated      From worker /usage tokens, converted via API-fetched model pricing (or raw tokens if unavailable)
   (3) Max Potential   Worst-case cost at current rate limits`);
-}
-
-/** Neurons per 1M tokens: [input, output]. From Workers AI pricing. */
-const TEXT_MODEL_NEURONS: Record<string, [number, number]> = {
-  "@cf/meta/llama-3.1-8b-instruct-awq": [11161, 24215],
-  "@cf/meta/llama-3.1-8b-instruct": [25608, 75147],
-  "@cf/openai/whisper": [41.14, 41.14], // per audio minute, not tokens; use as placeholder
-};
-
-const NEURONS_PER_DOLLAR = 1000 / 0.011;
-const FREE_NEURONS_PER_DAY = 10_000;
-
-/** Estimate neurons from tokens (output-heavy split ~30% input, 70% output). */
-function tokensToNeurons(tokens: number, modelId: string): number {
-  const rates = TEXT_MODEL_NEURONS[modelId] ?? [15000, 30000];
-  const [inRate, outRate] = rates;
-  const inputTokens = Math.floor(tokens * 0.3);
-  const outputTokens = tokens - inputTokens;
-  return (inputTokens / 1e6) * inRate + (outputTokens / 1e6) * outRate;
-}
-
-/** Cost in dollars for neurons above free tier. */
-function neuronsToCost(neurons: number): number {
-  const billable = Math.max(0, neurons - FREE_NEURONS_PER_DAY);
-  return billable / NEURONS_PER_DOLLAR;
 }
 
 async function cmdCost(args: string[]): Promise<number> {
@@ -166,8 +147,10 @@ async function cmdCost(args: string[]): Promise<number> {
     costHelp();
     return 0;
   }
-  const cfToken = process.env.CLOUDFLARE_API_TOKEN;
-  const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const cfToken =
+    process.env.CLOUDFLARE_API_TOKEN ?? process.env.CF_API_TOKEN ?? "";
+  const cfAccountId =
+    process.env.CLOUDFLARE_ACCOUNT_ID ?? process.env.CF_ACCOUNT_ID ?? "";
 
   // Load model config for pricing
   let textModelId = "@cf/meta/llama-3.1-8b-instruct-awq";
@@ -191,11 +174,11 @@ async function cmdCost(args: string[]): Promise<number> {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const query = `
-        query($accountTag: string!, $filter: AccountAiInferenceAdaptiveGroupsFilter_InputObject) {
+        query($accountTag: String!, $filter: AccountAiInferenceAdaptiveGroupsFilter_InputObject) {
           viewer {
             accounts(filter: { accountTag: $accountTag }) {
               aiInferenceAdaptiveGroups(limit: 100, filter: $filter) {
-                sum { neurons }
+                sum { totalNeurons }
                 dimensions { modelId }
               }
             }
@@ -213,7 +196,8 @@ async function cmdCost(args: string[]): Promise<number> {
           variables: {
             accountTag: cfAccountId,
             filter: {
-              date: { start: today, end: today },
+              date_geq: today,
+              date_leq: today,
             },
           },
         }),
@@ -223,7 +207,7 @@ async function cmdCost(args: string[]): Promise<number> {
           viewer?: {
             accounts?: Array<{
               aiInferenceAdaptiveGroups?: Array<{
-                sum?: { neurons?: number };
+                sum?: { neurons?: number; neuronCount?: number; neuron_count?: number; totalNeurons?: number };
                 dimensions?: { modelId?: string };
               }>;
             }>;
@@ -241,7 +225,7 @@ async function cmdCost(args: string[]): Promise<number> {
         } else {
           let totalNeurons = 0;
           for (const g of groups) {
-            const n = g.sum?.neurons ?? 0;
+            const n = g.sum?.totalNeurons ?? g.sum?.neurons ?? g.sum?.neuronCount ?? g.sum?.neuron_count ?? 0;
             totalNeurons += n;
             const modelId = g.dimensions?.modelId ?? "unknown";
             const cost = neuronsToCost(n);
@@ -256,6 +240,14 @@ async function cmdCost(args: string[]): Promise<number> {
     }
   }
 
+  // Fetch per-model pricing from API (null when unavailable). Never use disk-stored pricing.
+  const pricing =
+    cfToken && cfAccountId
+      ? await fetchModelPricing(cfToken, cfAccountId)
+      : null;
+  const modelRates = pricing?.[textModelId] ?? null;
+  const hasPricing = modelRates !== null;
+
   // --- Section 2: Estimated Spend from /usage ---
   console.log("\n=== (2) Estimated Spend (from rate-limit counters) ===");
   try {
@@ -264,13 +256,19 @@ async function cmdCost(args: string[]): Promise<number> {
     const usage = (await res.json()) as UsageResponse;
     const dayTokens = usage.day.globalTokens;
     const hourTokens = usage.hour.globalTokens;
-    const dayNeurons = tokensToNeurons(dayTokens, textModelId);
-    const hourNeurons = tokensToNeurons(hourTokens, textModelId);
-    const dayCost = neuronsToCost(dayNeurons);
-    const hourCost = neuronsToCost(hourNeurons);
-    console.log(`  Day  (${usage.day.key}): ${dayTokens.toLocaleString()} tokens → ~${Math.round(dayNeurons).toLocaleString()} neurons (~$${dayCost.toFixed(4)})`);
-    console.log(`  Hour (${usage.hour.key}): ${hourTokens.toLocaleString()} tokens → ~${Math.round(hourNeurons).toLocaleString()} neurons (~$${hourCost.toFixed(4)})`);
-    console.log("  (Estimates; model:", textModelId, ")");
+    if (hasPricing) {
+      const dayNeurons = tokensToNeurons(dayTokens, textModelId, modelRates);
+      const hourNeurons = tokensToNeurons(hourTokens, textModelId, modelRates);
+      const dayCost = neuronsToCost(dayNeurons);
+      const hourCost = neuronsToCost(hourNeurons);
+      console.log(`  Day  (${usage.day.key}): ${dayTokens.toLocaleString()} tokens → ~${Math.round(dayNeurons).toLocaleString()} neurons (~$${dayCost.toFixed(4)})`);
+      console.log(`  Hour (${usage.hour.key}): ${hourTokens.toLocaleString()} tokens → ~${Math.round(hourNeurons).toLocaleString()} neurons (~$${hourCost.toFixed(4)})`);
+      console.log("  (Estimates; model:", textModelId, ")");
+    } else {
+      console.log(`  Day  (${usage.day.key}): ${dayTokens.toLocaleString()} tokens`);
+      console.log(`  Hour (${usage.hour.key}): ${hourTokens.toLocaleString()} tokens`);
+      console.log("  Per-model pricing unavailable from API. Defer to section 1 for actual spend.");
+    }
   } catch (err) {
     console.log("  Could not fetch /usage (is the worker running?):", err instanceof Error ? err.message : String(err));
   }
@@ -282,14 +280,19 @@ async function cmdCost(args: string[]): Promise<number> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const usage = (await res.json()) as UsageResponse;
     const { limits } = usage;
-    const hourNeurons = tokensToNeurons(limits.globalPerHour, textModelId);
-    const dayNeurons = tokensToNeurons(limits.globalPerDay, textModelId);
-    const hourCost = neuronsToCost(hourNeurons);
-    const dayCost = neuronsToCost(dayNeurons);
-    console.log(`  At limits (worst-case output-heavy):`);
-    console.log(`  Max/hour: ${limits.globalPerHour.toLocaleString()} tokens → ~$${hourCost.toFixed(4)}`);
-    console.log(`  Max/day:  ${limits.globalPerDay.toLocaleString()} tokens → ~$${dayCost.toFixed(4)}`);
-    console.log(`  (Free tier: ${FREE_NEURONS_PER_DAY.toLocaleString()} neurons/day)`);
+    if (hasPricing) {
+      const hourNeurons = tokensToNeurons(limits.globalPerHour, textModelId, modelRates);
+      const dayNeurons = tokensToNeurons(limits.globalPerDay, textModelId, modelRates);
+      const hourCost = neuronsToCost(hourNeurons);
+      const dayCost = neuronsToCost(dayNeurons);
+      console.log(`  At limits (worst-case output-heavy):`);
+      console.log(`  Max/hour: ${limits.globalPerHour.toLocaleString()} tokens → ~$${hourCost.toFixed(4)}`);
+      console.log(`  Max/day:  ${limits.globalPerDay.toLocaleString()} tokens → ~$${dayCost.toFixed(4)}`);
+      console.log(`  (Free tier: ${FREE_NEURONS_PER_DAY.toLocaleString()} neurons/day)`);
+    } else {
+      console.log(`  At limits: ${limits.globalPerHour.toLocaleString()} tokens/hour, ${limits.globalPerDay.toLocaleString()} tokens/day`);
+      console.log("  Per-model pricing unavailable from API. Defer to section 1 for actual spend.");
+    }
   } catch (err) {
     console.log("  Could not compute (worker /usage unavailable):", err instanceof Error ? err.message : String(err));
   }

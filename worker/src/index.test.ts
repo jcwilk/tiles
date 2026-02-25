@@ -393,6 +393,306 @@ describe("worker", () => {
     });
   });
 
+  describe("POST /suggest", () => {
+    it("rejects request without allowed origin", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
+        body: JSON.stringify({ fragmentSource: "void main(){}", adventurousness: "moderate" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects invalid JSON body", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: "not json",
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Invalid JSON");
+    });
+
+    it("rejects missing or invalid fragmentSource", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ adventurousness: "moderate" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("fragmentSource");
+    });
+
+    it("rejects invalid adventurousness", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ fragmentSource: "void main(){}", adventurousness: "invalid" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("adventurousness");
+    });
+
+    it("returns suggestion for valid request", async () => {
+      const mockAI = createMockAI("Add a pulsing glow effect");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { suggestion: string };
+      expect(body.suggestion).toBe("Add a pulsing glow effect");
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          messages: expect.any(Array),
+          max_tokens: 128,
+          temperature: 0.7,
+        })
+      );
+    });
+
+    it("uses correct temperature for each adventurousness tier", async () => {
+      const mockAI = createMockAI("suggestion");
+      const env = createEnv({ AI: mockAI });
+      const baseHeaders = {
+        Origin: "https://user.github.io",
+        "Content-Type": "application/json",
+        "CF-Connecting-IP": "1.2.3.4",
+      };
+      for (const [tier, temp] of [
+        ["conservative", 0.3],
+        ["moderate", 0.7],
+        ["wild", 1.2],
+      ] as const) {
+        const req = new Request("http://localhost/suggest", {
+          method: "POST",
+          headers: baseHeaders,
+          body: JSON.stringify({
+            fragmentSource: "void main(){}",
+            adventurousness: tier,
+          }),
+        });
+        await worker.fetch(req, env, {} as ExecutionContext);
+        expect(env.AI.run).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ temperature: temp })
+        );
+      }
+    });
+
+    it("returns 429 when rate limit exceeded", async () => {
+      const now = Date.now();
+      const hourKey = new Date(now).toISOString().slice(0, 13);
+      const kv = createMockKV(
+        new Map([[`ip:1.2.3.4:${hourKey}`, "999999"]])
+      );
+      const env = createEnv({
+        RATE_LIMIT_KV: kv,
+        IP_PER_HOUR: "1000",
+        GLOBAL_PER_HOUR: "100000",
+        GLOBAL_PER_DAY: "500000",
+      });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(429);
+      const body = (await res.json()) as { error: string; retryAfter?: number };
+      expect(body.error).toContain("Rate limit exceeded");
+      expect(body.retryAfter).toBeDefined();
+      expect(env.AI.run).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /apply-directive", () => {
+    it("rejects request without allowed origin", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          directive: "add a glow",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects invalid JSON body", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: "not json",
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Invalid JSON");
+    });
+
+    it("rejects missing fragmentSource or directive", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ directive: "add glow" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("fragmentSource");
+    });
+
+    it("returns modified GLSL for valid request", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          directive: "add a pulsing effect",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { fragmentSource: string; tokensUsed?: number };
+      expect(body.fragmentSource).toBe("[VALID CODE]");
+      expect(typeof body.tokensUsed).toBe("number");
+    });
+
+    it("passes context shaders when provided", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          directive: "combine with reference",
+          contextShaders: ["void main(){ fragColor=vec4(0,1,0,1); }"],
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: "user",
+              content: expect.stringContaining("REFERENCE SHADERS"),
+            }),
+          ]),
+        })
+      );
+    });
+
+    it("accepts optional previousError for retry context", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          directive: "add glow",
+          previousError: "syntax error at line 5",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: "user",
+              content: expect.stringContaining("syntax error at line 5"),
+            }),
+          ]),
+        })
+      );
+    });
+
+    it("returns 429 when rate limit exceeded", async () => {
+      const now = Date.now();
+      const hourKey = new Date(now).toISOString().slice(0, 13);
+      const kv = createMockKV(
+        new Map([[`ip:1.2.3.4:${hourKey}`, "999999"]])
+      );
+      const env = createEnv({
+        RATE_LIMIT_KV: kv,
+        IP_PER_HOUR: "1000",
+        GLOBAL_PER_HOUR: "100000",
+        GLOBAL_PER_DAY: "500000",
+      });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          directive: "add a pulsing effect",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(429);
+      const body = (await res.json()) as { error: string; retryAfter?: number };
+      expect(body.error).toContain("Rate limit exceeded");
+      expect(body.retryAfter).toBeDefined();
+      expect(env.AI.run).not.toHaveBeenCalled();
+    });
+  });
+
   describe("404", () => {
     it("returns 404 for unknown path", async () => {
       const env = createEnv();
