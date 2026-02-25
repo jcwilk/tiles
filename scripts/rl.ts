@@ -7,8 +7,9 @@
 import { spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
 
-const SCRIPT_DIR = __dirname;
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = fs.existsSync(path.join(SCRIPT_DIR, "worker"))
   ? SCRIPT_DIR
   : path.join(SCRIPT_DIR, "..");
@@ -161,7 +162,7 @@ function neuronsToCost(neurons: number): number {
   return billable / NEURONS_PER_DOLLAR;
 }
 
-async function cmdCost(args: string[]): Promise<number> {
+export async function cmdCost(args: string[]): Promise<number> {
   if (args.includes("--help") || args.includes("-h")) {
     costHelp();
     return 0;
@@ -303,7 +304,7 @@ interface UsageResponse {
   limits: { ipPerHour: number; globalPerHour: number; globalPerDay: number };
 }
 
-async function cmdUsage(args: string[]): Promise<number> {
+export async function cmdUsage(args: string[]): Promise<number> {
   let showHour = true;
   let showDay = true;
   let showIp: string | null = null;
@@ -364,7 +365,7 @@ async function cmdUsage(args: string[]): Promise<number> {
   return 0;
 }
 
-function cmdLimits(args: string[]): number {
+export function cmdLimits(args: string[]): number {
   const sub = args[0] ?? "show";
   const rest = args.slice(1);
 
@@ -411,7 +412,7 @@ function cmdLimits(args: string[]): number {
   }
 }
 
-function cmdAlerts(args: string[]): number {
+export function cmdAlerts(args: string[]): number {
   const sub = args[0] ?? "show";
   const rest = args.slice(1);
 
@@ -513,4 +514,6 @@ async function main(): Promise<void> {
   process.exit(code);
 }
 
-main();
+if (!process.env.RL_TEST) {
+  main();
+}

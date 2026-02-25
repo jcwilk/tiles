@@ -10,6 +10,7 @@
     "dev": "concurrently -n frontend,worker \"npm run dev -w frontend\" \"npm run dev -w worker\"",
     "build": "npm run build --workspaces --if-present",
     "ci": "npx tsx scripts/ci-npm.ts",
+    "rl": "npx tsx scripts/rl.ts",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },

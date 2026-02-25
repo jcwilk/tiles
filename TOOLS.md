@@ -20,6 +20,7 @@ Run from project root. Symlinks point to `scripts/`.
 | Command | Purpose |
 |---------|---------|
 | `npm run ci` | Run `./ci` (allowlist-validated npm ci). Use for reproducible installs. |
+| `npm run rl` | Run `./rl` rate limit CLI. Equivalent to `npx tsx scripts/rl.ts`. |
 | `npm run dev` | Start Vite (frontend) and Wrangler (worker) in parallel. Frontend: port 5173, worker: port 8787. |
 | `npm test` | Run Vitest across frontend, worker, and scripts. Excludes prompt-eval tests. |
 | `npm run build` | Build frontend and worker. |
