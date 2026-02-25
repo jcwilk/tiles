@@ -331,11 +331,6 @@ function handlePopState(): void {
   }
 }
 
-/** Called when navigating to edit view. Overridden by edit view wiring (til-hq81). */
-export function setEditViewOverlay(el: HTMLElement | null): void {
-  editViewOverlay = el;
-}
-
 async function init(): Promise<void> {
   storage = createIndexedDBStorage();
   await seedIfEmpty(storage);
