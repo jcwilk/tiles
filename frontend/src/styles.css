@@ -301,6 +301,161 @@ body {
   background: rgba(255, 255, 255, 0.3);
 }
 
+.fullscreen-edit {
+  position: absolute;
+  top: 0.5rem;
+  right: 3rem;
+  z-index: 1001;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: rgba(100, 180, 255, 0.4);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fullscreen-edit:hover {
+  background: rgba(100, 180, 255, 0.6);
+}
+
+/* Edit view */
+.edit-view {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.edit-view-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.edit-view-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.edit-view-form {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.edit-view-form label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.edit-view-form input[type="text"],
+.edit-view-form textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+.edit-view-form textarea {
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+  resize: vertical;
+  min-height: 6rem;
+}
+
+.edit-preview-section {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: #1a1a1a;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.edit-preview-status {
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.edit-preview-ok {
+  color: rgba(100, 200, 120, 0.9);
+}
+
+.edit-preview-error {
+  color: #e57373;
+}
+
+.edit-preview-canvas-wrap {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 12rem;
+  background: #0a0a0a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.edit-preview-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.edit-view-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.edit-view-cancel,
+.edit-view-save {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.edit-view-cancel {
+  background: rgba(255, 255, 255, 0.15);
+  color: #e0e0e0;
+}
+
+.edit-view-cancel:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.edit-view-save {
+  background: rgba(100, 180, 255, 0.6);
+  color: #fff;
+}
+
+.edit-view-save:hover {
+  background: rgba(100, 180, 255, 0.8);
+}
+
+.edit-view-close {
+  margin-left: auto;
+}
+
 /* Toast notification */
 .toast {
   position: fixed;

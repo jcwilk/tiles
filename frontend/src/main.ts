@@ -13,6 +13,7 @@ import { performAddFromVoice } from "./add-from-voice.js";
 import { isBuiltInTile } from "./builtin.js";
 import type { ShaderObject } from "./types.js";
 import { sortShadersNewestFirst } from "./order.js";
+import { openEditView, closeEditView, isEditViewOpen } from "./edit-view.js";
 
 const appEl = document.getElementById("app");
 if (!appEl) throw new Error("Missing #app");
@@ -248,9 +249,33 @@ function openFullscreen(tile: TileElement): void {
   closeBtn.className = "fullscreen-close";
   closeBtn.setAttribute("aria-label", "Close");
   closeBtn.textContent = "×";
-  closeBtn.addEventListener("click", closeFullscreen);
+  closeBtn.addEventListener("click", () => history.back());
 
   overlay.appendChild(closeBtn);
+
+  const store = storage;
+  if (!isBuiltInTile(tile.shader) && store) {
+    const editBtn = document.createElement("button");
+    editBtn.className = "fullscreen-edit";
+    editBtn.setAttribute("aria-label", "Edit shader");
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => {
+      openEditView(tile.shader, store, {
+        onSave: (updated) => {
+          if (fullscreenTile) {
+            disposeTile(fullscreenTile);
+            const newTile = createTile(updated);
+            newTile.element.classList.add("tile");
+            newTile.element.addEventListener("click", (e) => e.stopPropagation());
+            fullscreenTile.element.replaceWith(newTile.element);
+            fullscreenTile = newTile;
+          }
+        },
+      });
+    });
+    overlay.appendChild(editBtn);
+  }
+
   overlay.appendChild(fullscreenTileEl.element);
 
   document.body.appendChild(overlay);
@@ -267,11 +292,13 @@ function closeFullscreen(): void {
   fullscreenOverlay.remove();
   fullscreenOverlay = null;
   fullscreenTile = null;
-
-  history.replaceState({}, "", window.location.pathname + window.location.search);
 }
 
 function handlePopState(): void {
+  if (isEditViewOpen()) {
+    closeEditView();
+    return;
+  }
   if (fullscreenOverlay) {
     closeFullscreen();
   }
