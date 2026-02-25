@@ -1,6 +1,6 @@
 ---
 id: til-nan6
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-25T02:12:21Z
