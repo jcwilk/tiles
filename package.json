@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "frontend",
-    "worker"
+    "worker",
+    "scripts"
   ],
   "scripts": {
     "dev": "concurrently -n frontend,worker \"npm run dev -w frontend\" \"npm run dev -w worker\"",
