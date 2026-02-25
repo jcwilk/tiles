@@ -8,7 +8,7 @@ This directory contains domain-specific knowledge and topic-specific deep dives.
 - *(Future Link)*: WebGL Sandbox & Backbuffer implementation details.
 - [Prompt Evaluation Tooling — Research Decision](prompt-eval-decision.md)
 - *(Future Link)*: AI Prompts and LLM Code Generation Strategy.
-- [Rate Limiting & Cloudflare Security Constraints](rate-limiting.md) — Rate limits, KV config, alerts, and cost monitoring.
+- [Rate Limiting & Cloudflare Security Constraints](rate-limiting.md) — Rate limits, KV config, alerts, and cost monitoring (`./rl cost`).
 
 ---
 
@@ -39,4 +39,4 @@ Run `npm run test:e2e -w frontend` to verify the full merge flow via browser aut
 
 ---
 
-*Last Updated: 2026-02-23*
+*Last Updated: 2026-02-25*
