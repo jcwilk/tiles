@@ -20,7 +20,7 @@ Run from project root. Symlinks point to `scripts/`.
 | Command | Purpose |
 |---------|---------|
 | `npm run dev` | Start Vite (frontend) and Wrangler (worker) in parallel. Frontend: port 5173, worker: port 8787. |
-| `npm test` | Run Vitest across frontend and worker. Excludes prompt-eval tests. |
+| `npm test` | Run Vitest across frontend, worker, and scripts. Excludes prompt-eval tests. |
 | `npm run build` | Build frontend and worker. |
 | `npm run lint` | Run workspace linters (tsc --noEmit). Equivalent to `./lint` via npm. |
 

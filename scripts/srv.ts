@@ -7,8 +7,9 @@
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
 
-const SCRIPT_DIR = __dirname;
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = fs.existsSync(path.join(SCRIPT_DIR, "worker"))
   ? SCRIPT_DIR
   : path.join(SCRIPT_DIR, "..");
@@ -18,7 +19,8 @@ const WORKER_DEV_URL = process.env.WORKER_DEV_URL ?? "http://localhost:8787";
 const SRV_REMOTE_FRONTEND_URL = process.env.SRV_REMOTE_FRONTEND_URL ?? "";
 const SRV_REMOTE_WORKER_URL =
   process.env.SRV_REMOTE_WORKER_URL ?? process.env.VITE_API_URL ?? "";
-const PIDFILE = path.join(ROOT_DIR, ".srv-dev.pid");
+const PIDFILE =
+  process.env.SRV_PIDFILE ?? path.join(ROOT_DIR, ".srv-dev.pid");
 
 function usageHelp(): void {
   console.log(`Usage: ./srv <command> [options]
@@ -58,7 +60,7 @@ function statusHelp(): void {
   Exit 0 only if all endpoints are reachable.`);
 }
 
-async function checkUrl(url: string, label: string): Promise<boolean> {
+export async function checkUrl(url: string, label: string): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -76,7 +78,7 @@ async function checkUrl(url: string, label: string): Promise<boolean> {
   }
 }
 
-async function cmdStatusLocal(): Promise<number> {
+export async function cmdStatusLocal(): Promise<number> {
   console.log("=== Local status ===");
   const [frontendOk, workerOk] = await Promise.all([
     checkUrl(`${VITE_DEV_URL}/`, `frontend (${VITE_DEV_URL})`),
@@ -85,13 +87,13 @@ async function cmdStatusLocal(): Promise<number> {
   return frontendOk && workerOk ? 0 : 1;
 }
 
-async function cmdStatusRemote(): Promise<number> {
+export async function cmdStatusRemote(): Promise<number> {
   if (!SRV_REMOTE_FRONTEND_URL && !SRV_REMOTE_WORKER_URL) {
     console.error("Error: set SRV_REMOTE_FRONTEND_URL and/or SRV_REMOTE_WORKER_URL for remote status");
     console.error(
       "Example: SRV_REMOTE_FRONTEND_URL=https://owner.github.io/tiles/ SRV_REMOTE_WORKER_URL=https://tiles-worker.workers.dev ./srv status remote"
     );
-    process.exit(1);
+    return 1;
   }
   console.log("=== Remote status ===");
   let frontendOk = true;
@@ -115,7 +117,7 @@ async function cmdStatusRemote(): Promise<number> {
   return frontendOk && workerOk ? 0 : 1;
 }
 
-async function cmdStatus(target: string): Promise<number> {
+export async function cmdStatus(target: string): Promise<number> {
   switch (target) {
     case "local":
       return cmdStatusLocal();
@@ -133,7 +135,7 @@ async function cmdStatus(target: string): Promise<number> {
   }
 }
 
-function cmdStart(): number {
+export function cmdStart(): number {
   if (fs.existsSync(PIDFILE)) {
     console.error("Dev servers may already be running (pidfile exists). Run './srv stop' first.");
     return 1;
@@ -152,7 +154,7 @@ function cmdStart(): number {
   return 0;
 }
 
-async function cmdStop(): Promise<number> {
+export async function cmdStop(): Promise<number> {
   if (!fs.existsSync(PIDFILE)) {
     console.error("No pidfile found. Dev servers may not have been started by ./srv.");
     return 1;
@@ -198,7 +200,7 @@ async function cmdStop(): Promise<number> {
   return 0;
 }
 
-async function cmdRestart(): Promise<number> {
+export async function cmdRestart(): Promise<number> {
   if (fs.existsSync(PIDFILE)) {
     await cmdStop();
   }
@@ -237,4 +239,7 @@ async function main(): Promise<void> {
   process.exit(code);
 }
 
-main();
+// Only run main when executed directly (not when imported for tests)
+if (!process.env.SRV_TEST) {
+  main();
+}
