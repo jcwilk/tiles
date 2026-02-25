@@ -129,12 +129,23 @@ Examples:
 }
 
 function costHelp(): void {
-  console.log(`Usage: ./rl cost
+  console.log(`Usage: ./rl cost [options]
 
 Shows three sections:
   (1) Actual Spend   From Cloudflare GraphQL API (requires CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)
   (2) Estimated      From worker /usage tokens, converted via model pricing
-  (3) Max Potential   Worst-case cost at current rate limits`);
+  (3) Max Potential   Worst-case cost at current rate limits
+
+Options:
+  --json             Output JSON only (no human-readable sections)
+  --account <id>     Cloudflare account ID (default: CLOUDFLARE_ACCOUNT_ID)
+  --since <ISO>      Start date YYYY-MM-DD (default: first day of current month)
+  --until <ISO>      End date YYYY-MM-DD (default: last day of current month)
+
+Examples:
+  ./rl cost                    # current month, account from env
+  ./rl cost --json             # JSON output
+  ./rl cost --since 2025-02-01 --until 2025-02-28`);
 }
 
 /** Neurons per 1M tokens: [input, output]. From Workers AI pricing. */
@@ -162,13 +173,142 @@ function neuronsToCost(neurons: number): number {
   return billable / NEURONS_PER_DOLLAR;
 }
 
+/** Row from Cloudflare spend API (model-level). */
+export interface CloudflareSpendRow {
+  service: string;
+  usage: number;
+  cost: number;
+}
+
+/** Result of fetchCloudflareSpend. */
+export interface CloudflareSpendResult {
+  rows: CloudflareSpendRow[];
+  totalNeurons: number;
+  totalCost: number;
+}
+
+/** Fetch spend data from Cloudflare GraphQL API. Throws on auth/network errors. */
+export async function fetchCloudflareSpend(params: {
+  accountId: string;
+  since: string;
+  until: string;
+  token: string;
+}): Promise<CloudflareSpendResult> {
+  const { accountId, since, until, token } = params;
+  const query = `
+    query($accountTag: string!, $filter: AccountAiInferenceAdaptiveGroupsFilter_InputObject) {
+      viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+          aiInferenceAdaptiveGroups(limit: 100, filter: $filter) {
+            sum { neurons }
+            dimensions { modelId }
+          }
+        }
+      }
+    }
+  `;
+  const res = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      query,
+      variables: {
+        accountTag: accountId,
+        filter: {
+          date: { start: since, end: until },
+        },
+      },
+    }),
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`Cloudflare API auth failed (${res.status})`);
+  }
+  if (!res.ok) {
+    throw new Error(`Cloudflare API HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as {
+    data?: {
+      viewer?: {
+        accounts?: Array<{
+          aiInferenceAdaptiveGroups?: Array<{
+            sum?: { neurons?: number };
+            dimensions?: { modelId?: string };
+          }>;
+        }>;
+      };
+    };
+    errors?: Array<{ message?: string }>;
+  };
+  if (data.errors?.length) {
+    throw new Error(data.errors[0]?.message ?? "GraphQL error");
+  }
+  const accounts = data.data?.viewer?.accounts ?? [];
+  const groups = accounts[0]?.aiInferenceAdaptiveGroups ?? [];
+  const rows: CloudflareSpendRow[] = [];
+  let totalNeurons = 0;
+  for (const g of groups) {
+    const n = g.sum?.neurons ?? 0;
+    totalNeurons += n;
+    rows.push({
+      service: g.dimensions?.modelId ?? "unknown",
+      usage: n,
+      cost: neuronsToCost(n),
+    });
+  }
+  return {
+    rows,
+    totalNeurons,
+    totalCost: neuronsToCost(totalNeurons),
+  };
+}
+
+/** First day of current month (YYYY-MM-DD). */
+function monthStart(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** Last day of current month (YYYY-MM-DD). */
+function monthEnd(): string {
+  const d = new Date();
+  const next = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+}
+
 export async function cmdCost(args: string[]): Promise<number> {
   if (args.includes("--help") || args.includes("-h")) {
     costHelp();
     return 0;
   }
+
+  let jsonMode = false;
+  let accountId = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
+  let since = monthStart();
+  let until = monthEnd();
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case "--json":
+        jsonMode = true;
+        break;
+      case "--account":
+        accountId = args[i + 1] ?? "";
+        i++;
+        break;
+      case "--since":
+        since = args[i + 1] ?? since;
+        i++;
+        break;
+      case "--until":
+        until = args[i + 1] ?? until;
+        i++;
+        break;
+    }
+  }
+
   const cfToken = process.env.CLOUDFLARE_API_TOKEN;
-  const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 
   // Load model config for pricing
   let textModelId = "@cf/meta/llama-3.1-8b-instruct-awq";
@@ -183,101 +323,57 @@ export async function cmdCost(args: string[]): Promise<number> {
   }
 
   // --- Section 1: Actual Spend from Cloudflare API ---
-  console.log("=== (1) Actual Spend (Cloudflare API) ===");
-  if (!cfToken || !cfAccountId) {
-    console.log(
-      "Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to view actual spend from Cloudflare GraphQL API."
-    );
+  let actualSpend: CloudflareSpendResult | null = null;
+  let actualSpendError: string | null = null;
+  if (!cfToken || !accountId) {
+    actualSpendError = "Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to view actual spend from Cloudflare GraphQL API.";
   } else {
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const query = `
-        query($accountTag: string!, $filter: AccountAiInferenceAdaptiveGroupsFilter_InputObject) {
-          viewer {
-            accounts(filter: { accountTag: $accountTag }) {
-              aiInferenceAdaptiveGroups(limit: 100, filter: $filter) {
-                sum { neurons }
-                dimensions { modelId }
-              }
-            }
-          }
-        }
-      `;
-      const res = await fetch("https://api.cloudflare.com/client/v4/graphql", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${cfToken}`,
-        },
-        body: JSON.stringify({
-          query,
-          variables: {
-            accountTag: cfAccountId,
-            filter: {
-              date: { start: today, end: today },
-            },
-          },
-        }),
-      });
-      const data = (await res.json()) as {
-        data?: {
-          viewer?: {
-            accounts?: Array<{
-              aiInferenceAdaptiveGroups?: Array<{
-                sum?: { neurons?: number };
-                dimensions?: { modelId?: string };
-              }>;
-            }>;
-          };
-        };
-        errors?: Array<{ message?: string }>;
-      };
-      if (data.errors?.length) {
-        console.log("GraphQL error:", data.errors[0]?.message ?? "Unknown");
-      } else {
-        const accounts = data.data?.viewer?.accounts ?? [];
-        const groups = accounts[0]?.aiInferenceAdaptiveGroups ?? [];
-        if (groups.length === 0) {
-          console.log("No neuron data in response (schema may differ or no usage today).");
-        } else {
-          let totalNeurons = 0;
-          for (const g of groups) {
-            const n = g.sum?.neurons ?? 0;
-            totalNeurons += n;
-            const modelId = g.dimensions?.modelId ?? "unknown";
-            const cost = neuronsToCost(n);
-            console.log(`  ${modelId}: ${n.toLocaleString()} neurons (~$${cost.toFixed(4)})`);
-          }
-          const totalCost = neuronsToCost(totalNeurons);
-          console.log(`  Total: ${totalNeurons.toLocaleString()} neurons (~$${totalCost.toFixed(4)})`);
-        }
-      }
+      actualSpend = await fetchCloudflareSpend({ accountId, since, until, token: cfToken });
     } catch (err) {
-      console.log("Could not fetch from Cloudflare API:", err instanceof Error ? err.message : String(err));
+      actualSpendError = err instanceof Error ? err.message : String(err);
     }
   }
 
   // --- Section 2: Estimated Spend from /usage ---
-  console.log("\n=== (2) Estimated Spend (from rate-limit counters) ===");
+  let estimatedSpend: {
+    day: { key: string; tokens: number; neurons: number; cost: number };
+    hour: { key: string; tokens: number; neurons: number; cost: number };
+    model: string;
+  } | null = null;
+  let estimatedError: string | null = null;
   try {
     const res = await fetch(`${API_URL}/usage`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const usage = (await res.json()) as UsageResponse;
-    const dayTokens = usage.day.globalTokens;
-    const hourTokens = usage.hour.globalTokens;
-    const dayNeurons = tokensToNeurons(dayTokens, textModelId);
-    const hourNeurons = tokensToNeurons(hourTokens, textModelId);
-    const dayCost = neuronsToCost(dayNeurons);
-    const hourCost = neuronsToCost(hourNeurons);
-    console.log(`  Day  (${usage.day.key}): ${dayTokens.toLocaleString()} tokens → ~${Math.round(dayNeurons).toLocaleString()} neurons (~$${dayCost.toFixed(4)})`);
-    console.log(`  Hour (${usage.hour.key}): ${hourTokens.toLocaleString()} tokens → ~${Math.round(hourNeurons).toLocaleString()} neurons (~$${hourCost.toFixed(4)})`);
-    console.log("  (Estimates; model:", textModelId, ")");
+    const dayNeurons = tokensToNeurons(usage.day.globalTokens, textModelId);
+    const hourNeurons = tokensToNeurons(usage.hour.globalTokens, textModelId);
+    estimatedSpend = {
+      day: {
+        key: usage.day.key,
+        tokens: usage.day.globalTokens,
+        neurons: Math.round(dayNeurons),
+        cost: neuronsToCost(dayNeurons),
+      },
+      hour: {
+        key: usage.hour.key,
+        tokens: usage.hour.globalTokens,
+        neurons: Math.round(hourNeurons),
+        cost: neuronsToCost(hourNeurons),
+      },
+      model: textModelId,
+    };
   } catch (err) {
-    console.log("  Could not fetch /usage (is the worker running?):", err instanceof Error ? err.message : String(err));
+    estimatedError = err instanceof Error ? err.message : String(err);
   }
 
   // --- Section 3: Max Potential Spend ---
-  console.log("\n=== (3) Max Potential Spend ===");
+  let maxPotential: {
+    maxPerHour: { tokens: number; cost: number };
+    maxPerDay: { tokens: number; cost: number };
+    freeTierNeuronsPerDay: number;
+  } | null = null;
+  let maxPotentialError: string | null = null;
   try {
     const res = await fetch(`${API_URL}/usage`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -285,14 +381,76 @@ export async function cmdCost(args: string[]): Promise<number> {
     const { limits } = usage;
     const hourNeurons = tokensToNeurons(limits.globalPerHour, textModelId);
     const dayNeurons = tokensToNeurons(limits.globalPerDay, textModelId);
-    const hourCost = neuronsToCost(hourNeurons);
-    const dayCost = neuronsToCost(dayNeurons);
-    console.log(`  At limits (worst-case output-heavy):`);
-    console.log(`  Max/hour: ${limits.globalPerHour.toLocaleString()} tokens → ~$${hourCost.toFixed(4)}`);
-    console.log(`  Max/day:  ${limits.globalPerDay.toLocaleString()} tokens → ~$${dayCost.toFixed(4)}`);
-    console.log(`  (Free tier: ${FREE_NEURONS_PER_DAY.toLocaleString()} neurons/day)`);
+    maxPotential = {
+      maxPerHour: { tokens: limits.globalPerHour, cost: neuronsToCost(hourNeurons) },
+      maxPerDay: { tokens: limits.globalPerDay, cost: neuronsToCost(dayNeurons) },
+      freeTierNeuronsPerDay: FREE_NEURONS_PER_DAY,
+    };
   } catch (err) {
-    console.log("  Could not compute (worker /usage unavailable):", err instanceof Error ? err.message : String(err));
+    maxPotentialError = err instanceof Error ? err.message : String(err);
+  }
+
+  if (jsonMode) {
+    const out: Record<string, unknown> = {
+      actualSpend: actualSpendError
+        ? { error: actualSpendError }
+        : actualSpend
+          ? {
+              rows: actualSpend.rows,
+              totalNeurons: actualSpend.totalNeurons,
+              totalCost: actualSpend.totalCost,
+              since,
+              until,
+            }
+          : { error: "No data" },
+      estimatedSpend: estimatedError
+        ? { error: estimatedError }
+        : estimatedSpend,
+      maxPotential: maxPotentialError
+        ? { error: maxPotentialError }
+        : maxPotential,
+    };
+    console.log(JSON.stringify(out, null, 2));
+    return 0;
+  }
+
+  // Pretty-print mode
+  console.log("=== (1) Actual Spend (Cloudflare API) ===");
+  if (actualSpendError) {
+    console.log(actualSpendError);
+  } else if (actualSpend) {
+    if (actualSpend.rows.length === 0) {
+      console.log(`No neuron data for ${since} to ${until} (schema may differ or no usage in range).`);
+    } else {
+      const col1 = Math.max(8, ...actualSpend.rows.map((r) => r.service.length));
+      const header = `  ${"Service".padEnd(col1)}  ${"Usage (neurons)".padStart(14)}  ${"Cost".padStart(10)}`;
+      console.log(header);
+      console.log("  " + "-".repeat(col1 + 14 + 12));
+      for (const r of actualSpend.rows) {
+        console.log(`  ${r.service.padEnd(col1)}  ${r.usage.toLocaleString().padStart(14)}  $${r.cost.toFixed(4).padStart(9)}`);
+      }
+      console.log("  " + "-".repeat(col1 + 14 + 12));
+      console.log(`  ${"Total".padEnd(col1)}  ${actualSpend.totalNeurons.toLocaleString().padStart(14)}  $${actualSpend.totalCost.toFixed(4).padStart(9)}`);
+    }
+  }
+
+  console.log("\n=== (2) Estimated Spend (from rate-limit counters) ===");
+  if (estimatedError) {
+    console.log("  Could not fetch /usage (is the worker running?):", estimatedError);
+  } else if (estimatedSpend) {
+    console.log(`  Day  (${estimatedSpend.day.key}): ${estimatedSpend.day.tokens.toLocaleString()} tokens → ~${estimatedSpend.day.neurons.toLocaleString()} neurons (~$${estimatedSpend.day.cost.toFixed(4)})`);
+    console.log(`  Hour (${estimatedSpend.hour.key}): ${estimatedSpend.hour.tokens.toLocaleString()} tokens → ~${estimatedSpend.hour.neurons.toLocaleString()} neurons (~$${estimatedSpend.hour.cost.toFixed(4)})`);
+    console.log("  (Estimates; model:", estimatedSpend.model, ")");
+  }
+
+  console.log("\n=== (3) Max Potential Spend ===");
+  if (maxPotentialError) {
+    console.log("  Could not compute (worker /usage unavailable):", maxPotentialError);
+  } else if (maxPotential) {
+    console.log("  At limits (worst-case output-heavy):");
+    console.log(`  Max/hour: ${maxPotential.maxPerHour.tokens.toLocaleString()} tokens → ~$${maxPotential.maxPerHour.cost.toFixed(4)}`);
+    console.log(`  Max/day:  ${maxPotential.maxPerDay.tokens.toLocaleString()} tokens → ~$${maxPotential.maxPerDay.cost.toFixed(4)}`);
+    console.log(`  (Free tier: ${maxPotential.freeTierNeuronsPerDay.toLocaleString()} neurons/day)`);
   }
 
   return 0;

@@ -234,26 +234,55 @@ describe("rl cmdAlerts", () => {
   });
 });
 
+const cloudflareGraphqlUrl = "https://api.cloudflare.com/client/v4/graphql";
+
+function mockFetchCost(opts: {
+  cloudflare?: { ok?: boolean; status?: number; body?: unknown; reject?: Error };
+  usage?: { ok?: boolean; body?: unknown };
+} = {}) {
+  const cf = opts.cloudflare ?? {};
+  const usage = opts.usage ?? {};
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init?: RequestInit) => {
+      if (url.includes("/usage")) {
+        return Promise.resolve({
+          ok: usage.ok ?? true,
+          json: () => Promise.resolve(usage.body ?? {
+            hour: { key: "h", globalTokens: 100, limit: 10000 },
+            day: { key: "d", globalTokens: 500, limit: 50000 },
+            limits: { ipPerHour: 5000, globalPerHour: 10000, globalPerDay: 50000 },
+          }),
+        } as Response);
+      }
+      if (url === cloudflareGraphqlUrl) {
+        if (cf.reject) return Promise.reject(cf.reject);
+        const status = cf.status ?? (cf.ok === false ? 401 : 200);
+        return Promise.resolve({
+          ok: status >= 200 && status < 300,
+          status,
+          json: () => Promise.resolve(cf.body ?? {
+            data: {
+              viewer: {
+                accounts: [{
+                  aiInferenceAdaptiveGroups: [
+                    { sum: { neurons: 5000 }, dimensions: { modelId: "@cf/meta/llama-3.1-8b" } },
+                    { sum: { neurons: 3000 }, dimensions: { modelId: "@cf/openai/whisper" } },
+                  ],
+                }],
+              },
+            },
+          }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: false, status: 404 } as Response);
+    })
+  );
+}
+
 describe("rl cmdCost", () => {
   beforeEach(() => {
     mockSpawnSync.mockReset();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: string) => {
-        if (url.includes("/usage")) {
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                hour: { key: "h", globalTokens: 100, limit: 10000 },
-                day: { key: "d", globalTokens: 500, limit: 50000 },
-                limits: { ipPerHour: 5000, globalPerHour: 10000, globalPerDay: 50000 },
-              }),
-          } as Response);
-        }
-        return Promise.resolve({ ok: false } as Response);
-      })
-    );
   });
 
   afterEach(() => {
@@ -261,6 +290,7 @@ describe("rl cmdCost", () => {
   });
 
   it("cost --help returns 0", async () => {
+    mockFetchCost();
     const { cmdCost } = await loadRl();
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const code = await cmdCost(["--help"]);
@@ -269,7 +299,8 @@ describe("rl cmdCost", () => {
     consoleSpy.mockRestore();
   });
 
-  it("cost prints three sections", async () => {
+  it("cost prints three sections when env missing", async () => {
+    mockFetchCost();
     const { cmdCost } = await loadRl();
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const code = await cmdCost([]);
@@ -279,5 +310,138 @@ describe("rl cmdCost", () => {
     expect(output).toContain("(2) Estimated Spend");
     expect(output).toContain("(3) Max Potential Spend");
     consoleSpy.mockRestore();
+  });
+
+  it("cost with Cloudflare env fetches spend and prints table", async () => {
+    mockFetchCost({ cloudflare: { ok: true } });
+    const { cmdCost } = await loadRl({
+      CLOUDFLARE_API_TOKEN: "test-token",
+      CLOUDFLARE_ACCOUNT_ID: "test-account",
+    });
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await cmdCost([]);
+    expect(code).toBe(0);
+    const output = consoleSpy.mock.calls.flatMap((c) => c).join("\n");
+    expect(output).toContain("(1) Actual Spend");
+    expect(output).toContain("Service");
+    expect(output).toContain("@cf/meta/llama-3.1-8b");
+    expect(output).toContain("Total");
+    consoleSpy.mockRestore();
+  });
+
+  it("cost --json outputs JSON only", async () => {
+    mockFetchCost({ cloudflare: { ok: true } });
+    const { cmdCost } = await loadRl({
+      CLOUDFLARE_API_TOKEN: "test-token",
+      CLOUDFLARE_ACCOUNT_ID: "test-account",
+    });
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await cmdCost(["--json"]);
+    expect(code).toBe(0);
+    const output = consoleSpy.mock.calls.flatMap((c) => c).join("\n");
+    const parsed = JSON.parse(output);
+    expect(parsed).toHaveProperty("actualSpend");
+    expect(parsed).toHaveProperty("estimatedSpend");
+    expect(parsed).toHaveProperty("maxPotential");
+    expect(parsed.actualSpend).toHaveProperty("rows");
+    expect(parsed.actualSpend.rows).toHaveLength(2);
+    consoleSpy.mockRestore();
+  });
+
+  it("cost handles 401 from Cloudflare API", async () => {
+    mockFetchCost({ cloudflare: { ok: false, status: 401 } });
+    const { cmdCost } = await loadRl({
+      CLOUDFLARE_API_TOKEN: "bad-token",
+      CLOUDFLARE_ACCOUNT_ID: "test-account",
+    });
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await cmdCost([]);
+    expect(code).toBe(0);
+    const output = consoleSpy.mock.calls.flatMap((c) => c).join("\n");
+    expect(output).toContain("auth failed");
+    expect(output).toContain("401");
+    consoleSpy.mockRestore();
+  });
+
+  it("cost handles 403 from Cloudflare API", async () => {
+    mockFetchCost({ cloudflare: { ok: false, status: 403 } });
+    const { cmdCost } = await loadRl({
+      CLOUDFLARE_API_TOKEN: "forbidden",
+      CLOUDFLARE_ACCOUNT_ID: "test-account",
+    });
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await cmdCost([]);
+    expect(code).toBe(0);
+    const output = consoleSpy.mock.calls.flatMap((c) => c).join("\n");
+    expect(output).toContain("auth failed");
+    expect(output).toContain("403");
+    consoleSpy.mockRestore();
+  });
+
+  it("cost handles network error from Cloudflare API", async () => {
+    mockFetchCost({
+      cloudflare: { reject: new Error("network error") },
+    });
+    const { cmdCost } = await loadRl({
+      CLOUDFLARE_API_TOKEN: "test-token",
+      CLOUDFLARE_ACCOUNT_ID: "test-account",
+    });
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await cmdCost([]);
+    expect(code).toBe(0);
+    const output = consoleSpy.mock.calls.flatMap((c) => c).join("\n");
+    expect(output).toContain("network error");
+    consoleSpy.mockRestore();
+  });
+
+  it("cost handles malformed Cloudflare response", async () => {
+    mockFetchCost({
+      cloudflare: {
+        ok: true,
+        body: { errors: [{ message: "Invalid query" }] },
+      },
+    });
+    const { cmdCost } = await loadRl({
+      CLOUDFLARE_API_TOKEN: "test-token",
+      CLOUDFLARE_ACCOUNT_ID: "test-account",
+    });
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await cmdCost([]);
+    expect(code).toBe(0);
+    const output = consoleSpy.mock.calls.flatMap((c) => c).join("\n");
+    expect(output).toContain("Invalid query");
+    consoleSpy.mockRestore();
+  });
+
+  it("fetchCloudflareSpend returns structured result", async () => {
+    mockFetchCost({ cloudflare: { ok: true } });
+    const { fetchCloudflareSpend } = await loadRl();
+    const result = await fetchCloudflareSpend({
+      accountId: "acc",
+      since: "2025-02-01",
+      until: "2025-02-28",
+      token: "tok",
+    });
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0]).toEqual({
+      service: "@cf/meta/llama-3.1-8b",
+      usage: 5000,
+      cost: expect.any(Number),
+    });
+    expect(result.totalNeurons).toBe(8000);
+    expect(result.totalCost).toBeGreaterThanOrEqual(0);
+  });
+
+  it("fetchCloudflareSpend throws on 401", async () => {
+    mockFetchCost({ cloudflare: { ok: false, status: 401 } });
+    const { fetchCloudflareSpend } = await loadRl();
+    await expect(
+      fetchCloudflareSpend({
+        accountId: "acc",
+        since: "2025-02-01",
+        until: "2025-02-28",
+        token: "bad",
+      })
+    ).rejects.toThrow("auth failed");
   });
 });
