@@ -138,17 +138,12 @@ export async function fetchSuggestion(
   return ok;
 }
 
-export interface ApplyDirectiveResponse {
-  fragmentSource: string;
-  tokensUsed?: number;
-}
-
 export async function applyDirective(
   fragmentSource: string,
   directive: string,
   contextShaders?: string[],
   previousError?: string
-): Promise<ApplyDirectiveResponse> {
+): Promise<GenerateResponse> {
   const url = `${getApiUrl()}/apply-directive`;
   const body: {
     fragmentSource: string;
@@ -172,14 +167,14 @@ export async function applyDirective(
     body: JSON.stringify(body),
   });
 
-  const data = (await res.json()) as ApplyDirectiveResponse | GenerateError;
+  const data = (await res.json()) as GenerateResponse | GenerateError;
 
   if (!res.ok) {
     const err = data as GenerateError;
     throw new Error(err.details ?? err.error ?? `Request failed: ${res.status}`);
   }
 
-  const ok = data as ApplyDirectiveResponse;
+  const ok = data as GenerateResponse;
   if (typeof ok.fragmentSource !== "string") {
     throw new Error("Invalid response: missing fragmentSource");
   }
