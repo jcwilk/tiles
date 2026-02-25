@@ -342,6 +342,18 @@ body {
   background: #1a1a1a;
 }
 
+@media (min-width: 480px) {
+  .edit-context-grid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .edit-view-shader {
+    max-height: 50vh;
+  }
+}
+
 .edit-suggestion {
   margin: 1rem;
   padding: 1rem 1.25rem;
@@ -373,6 +385,7 @@ body {
 
 .edit-suggestion:not(.loading) {
   cursor: pointer;
+  transition: background 0.2s ease;
 }
 
 .edit-suggestion:not(.loading):hover {
@@ -384,7 +397,7 @@ body {
   gap: 0.75rem;
   justify-content: center;
   align-items: center;
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   flex-wrap: wrap;
 }
 
@@ -419,7 +432,7 @@ body {
 
 .edit-context-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   gap: 0.5rem;
   padding: 1rem;
 }
@@ -429,7 +442,12 @@ body {
   position: relative;
 }
 
-.edit-context-grid .tile input[type="checkbox"] {
+.edit-context-grid label {
+  position: relative;
+  display: block;
+}
+
+.edit-context-grid input[type="checkbox"] {
   position: absolute;
   top: 0.25rem;
   left: 0.25rem;
@@ -439,17 +457,7 @@ body {
 }
 
 .edit-mic-active {
-  animation: edit-mic-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes edit-mic-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(220, 80, 80, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(220, 80, 80, 0);
-  }
+  animation: tile-add-recording-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes toast-enter {
