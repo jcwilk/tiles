@@ -318,11 +318,15 @@ function closeFullscreen(): void {
 function handlePopState(): void {
   const hash = window.location.hash;
   const isEditHash = /^#([^/]+)\/edit$/.test(hash);
+  const fullscreenId = fullscreenTile?.shader.id;
+  const hashMatchesFullscreen =
+    fullscreenId &&
+    (hash === `#${fullscreenId}` || hash === `#${fullscreenId}/edit`);
 
   if (editViewOverlay && !isEditHash) {
     closeEditView();
   }
-  if (fullscreenOverlay && !hash) {
+  if (fullscreenOverlay && !hashMatchesFullscreen) {
     closeFullscreen();
   }
 }

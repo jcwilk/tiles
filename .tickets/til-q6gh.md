@@ -1,6 +1,6 @@
 ---
 id: til-q6gh
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-25T02:11:57Z
