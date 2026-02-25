@@ -7,7 +7,7 @@
     "scripts"
   ],
   "scripts": {
-    "dev": "concurrently -n frontend,worker \"npm run dev -w frontend\" \"npm run dev -w worker\"",
+    "dev": "scripts/check-ports.sh && concurrently -n frontend,worker \"npm run dev -w frontend\" \"npm run dev -w worker\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"

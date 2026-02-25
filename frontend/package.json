@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "../scripts/check-ports.sh 5173 && vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
