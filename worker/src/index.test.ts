@@ -16,7 +16,7 @@ vi.mock("mimetext", () => ({
 }));
 
 import models from "../models.json";
-import worker, { sanitizeGLSL, getLimits } from "./index.js";
+import worker, { sanitizeGLSL, getLimits, buildApplyDirectivePrompt } from "./index.js";
 import type { Env } from "./index.js";
 
 function createMockKV(initial?: Map<string, string>): KVNamespace & { store: Map<string, string> } {
@@ -393,6 +393,184 @@ describe("worker", () => {
     });
   });
 
+  describe("POST /apply-directive", () => {
+    it("rejects request without allowed origin", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          directive: "make it blue",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("origin not allowed");
+    });
+
+    it("rejects invalid JSON body", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: "not json",
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Invalid JSON");
+    });
+
+    it("rejects missing fragmentSource or directive", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ fragmentSource: "void main(){}" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("fragmentSource/directive");
+    });
+
+    it("rejects empty directive", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ fragmentSource: "void main(){}", directive: "   " }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("directive");
+    });
+
+    it("rejects invalid contextShaders (not array)", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          directive: "make it blue",
+          contextShaders: "not-an-array",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("contextShaders");
+    });
+
+    it("rejects contextShaders with non-string elements", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          directive: "make it blue",
+          contextShaders: ["valid", 123],
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("contextShaders");
+    });
+
+    it("returns modified shader for valid request without context shaders", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "#version 300 es\nprecision highp float;\nvoid main(){ fragColor=vec4(1); }",
+          directive: "make it blue",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { fragmentSource: string; tokensUsed: number };
+      expect(body.fragmentSource).toBe("[VALID CODE]");
+      expect(typeof body.tokensUsed).toBe("number");
+      expect(env.AI.run).toHaveBeenCalled();
+    });
+
+    it("returns modified shader for valid request with context shaders", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          directive: "add plasma effect",
+          contextShaders: ["void main(){ fragColor=vec4(0,1,0,1); }"],
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { fragmentSource: string };
+      expect(body.fragmentSource).toBe("[VALID CODE]");
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: "user",
+              content: expect.stringContaining("REFERENCE SHADERS"),
+            }),
+          ]),
+        })
+      );
+    });
+
+    it("accepts optional previousError for retry context", async () => {
+      const mockAI = createMockAI("[VALID CODE]");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          directive: "make it blue",
+          previousError: "syntax error at line 5",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: "user",
+              content: expect.stringContaining("syntax error at line 5"),
+            }),
+          ]),
+        })
+      );
+    });
+  });
+
   describe("404", () => {
     it("returns 404 for unknown path", async () => {
       const env = createEnv();
@@ -437,6 +615,29 @@ describe("worker", () => {
       expect(typeof body.limits.globalPerHour).toBe("number");
       expect(typeof body.limits.globalPerDay).toBe("number");
     });
+  });
+});
+
+describe("buildApplyDirectivePrompt", () => {
+  it("includes main shader and directive", () => {
+    const prompt = buildApplyDirectivePrompt("void main(){}", "make it blue");
+    expect(prompt).toContain("MAIN SHADER");
+    expect(prompt).toContain("void main(){}");
+    expect(prompt).toContain("DIRECTIVE");
+    expect(prompt).toContain("make it blue");
+  });
+
+  it("includes reference shaders when provided", () => {
+    const prompt = buildApplyDirectivePrompt("void main(){}", "add plasma", ["ref1", "ref2"]);
+    expect(prompt).toContain("REFERENCE SHADERS");
+    expect(prompt).toContain("ref1");
+    expect(prompt).toContain("ref2");
+  });
+
+  it("includes previousError when provided", () => {
+    const prompt = buildApplyDirectivePrompt("void main(){}", "fix it", undefined, "syntax error");
+    expect(prompt).toContain("syntax error");
+    expect(prompt).toContain("previous attempt failed");
   });
 });
 

@@ -91,6 +91,10 @@ export default {
       return handleGenerateFromPrompt(request, env, corsHeaders);
     }
 
+    if (url.pathname === "/apply-directive" && request.method === "POST") {
+      return handleApplyDirective(request, env, corsHeaders);
+    }
+
     return jsonResponse({ error: "Not Found" }, 404, corsHeaders);
   },
 
@@ -448,6 +452,163 @@ ${fragmentB}
   }
   base += `Output the merged fragment shader (raw GLSL, no \`\`\` fences):`;
   return base;
+}
+
+interface ApplyDirectiveBody {
+  fragmentSource: string;
+  directive: string;
+  contextShaders?: string[];
+  previousError?: string;
+}
+
+/** Exported for tests */
+export function buildApplyDirectivePrompt(
+  fragmentSource: string,
+  directive: string,
+  contextShaders?: string[],
+  previousError?: string
+): string {
+  let base = `Modify the MAIN SHADER below according to the DIRECTIVE. Output raw GLSL only.
+
+CRITICAL: The MAIN SHADER is the one to edit. Any REFERENCE SHADERS are for inspiration only — do not copy them wholesale; use them for ideas.
+
+Output raw GLSL only. Start with:
+#version 300 es
+precision highp float;
+
+Use: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
+
+--- MAIN SHADER (the one to edit) ---
+\`\`\`glsl
+${fragmentSource}
+\`\`\`
+
+--- DIRECTIVE ---
+${directive}
+`;
+  if (contextShaders && contextShaders.length > 0) {
+    base += `\n--- REFERENCE SHADERS (context only, do not copy wholesale) ---\n`;
+    contextShaders.forEach((shader, i) => {
+      base += `\nReference ${i + 1}:\n\`\`\`glsl\n${shader}\n\`\`\`\n`;
+    });
+  }
+  if (previousError) {
+    base += `\nThe previous attempt failed to compile. Fix the error and output corrected GLSL (raw code only, no markdown):\n${previousError}\n\n`;
+  }
+  base += `Output the modified fragment shader (raw GLSL, no \`\`\` fences):`;
+  return base;
+}
+
+async function handleApplyDirective(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const origin = request.headers.get("Origin") ?? "";
+  if (!isOriginAllowed(origin, env)) {
+    return jsonResponse({ error: "Forbidden: origin not allowed" }, 403, corsHeaders);
+  }
+
+  let body: ApplyDirectiveBody;
+  try {
+    body = (await request.json()) as ApplyDirectiveBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
+  }
+
+  const { fragmentSource, directive, contextShaders } = body;
+  if (typeof fragmentSource !== "string" || typeof directive !== "string") {
+    return jsonResponse(
+      { error: "Missing or invalid fragmentSource/directive (must be strings)" },
+      400,
+      corsHeaders
+    );
+  }
+  if (!directive.trim()) {
+    return jsonResponse({ error: "Missing or invalid directive (must be non-empty)" }, 400, corsHeaders);
+  }
+  if (contextShaders !== undefined) {
+    if (!Array.isArray(contextShaders)) {
+      return jsonResponse({ error: "contextShaders must be an array of strings" }, 400, corsHeaders);
+    }
+    const invalid = contextShaders.some((s) => typeof s !== "string");
+    if (invalid) {
+      return jsonResponse({ error: "contextShaders must contain only strings" }, 400, corsHeaders);
+    }
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const limits = await getLimits(env);
+
+  const rateLimitResult = await checkRateLimits(env.RATE_LIMIT_KV, ip, limits);
+  if (!rateLimitResult.allowed) {
+    return jsonResponse(
+      {
+        error: "Rate limit exceeded",
+        retryAfter: rateLimitResult.retryAfter,
+      },
+      429,
+      {
+        ...corsHeaders,
+        ...(rateLimitResult.retryAfter ? { "Retry-After": String(rateLimitResult.retryAfter) } : {}),
+      }
+    );
+  }
+
+  const previousError = typeof body.previousError === "string" ? body.previousError : undefined;
+  const prompt = buildApplyDirectivePrompt(fragmentSource, directive.trim(), contextShaders, previousError);
+
+  try {
+    const response = await env.AI.run(TEXT_MODEL, {
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert GLSL shader programmer. You modify fragment shaders according to user directives.
+
+CRITICAL: Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
+Required format:
+- First line: #version 300 es
+- Second line: precision highp float;
+- Required API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
+- End with your main() and fragColor assignment.
+The MAIN SHADER in the user message is the one to edit. REFERENCE SHADERS (if any) are for inspiration only — do not copy them wholesale.`,
+        },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: models.text.maxTokens,
+    });
+
+    const result = response as {
+      response?: string;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+    };
+    const generated = typeof result.response === "string" ? result.response : String(result?.response ?? "");
+    const usage = result.usage;
+    const tokensUsed = usage?.total_tokens ?? estimateTokens(prompt + generated);
+
+    await incrementRateLimits(env.RATE_LIMIT_KV, ip, tokensUsed);
+
+    const sanitized = sanitizeGLSL(generated);
+
+    return jsonResponse(
+      {
+        fragmentSource: sanitized,
+        tokensUsed,
+      },
+      200,
+      corsHeaders
+    );
+  } catch (err) {
+    console.error("AI run error:", err);
+    return jsonResponse(
+      {
+        error: "AI generation failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      },
+      502,
+      corsHeaders
+    );
+  }
 }
 
 /** Test placeholders (CONVENTIONS.md) - pass through unchanged */
