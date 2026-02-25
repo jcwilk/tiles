@@ -91,6 +91,14 @@ export default {
       return handleGenerateFromPrompt(request, env, corsHeaders);
     }
 
+    if (url.pathname === "/suggest" && request.method === "POST") {
+      return handleSuggest(request, env, corsHeaders);
+    }
+
+    if (url.pathname === "/apply-directive" && request.method === "POST") {
+      return handleApplyDirective(request, env, corsHeaders);
+    }
+
     return jsonResponse({ error: "Not Found" }, 404, corsHeaders);
   },
 
@@ -283,6 +291,246 @@ Use: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in v
     msg += `\nThe previous attempt failed to compile. Fix the error and output corrected GLSL (raw code only, no markdown):\n${previousError}\n\n`;
   }
   msg += `Output the fragment shader (raw GLSL, no \`\`\` fences):`;
+  return msg;
+}
+
+const ADVENTUROUSNESS_TEMPERATURE: Record<string, number> = {
+  conservative: 0.3,
+  moderate: 0.7,
+  wild: 1.2,
+};
+
+interface SuggestBody {
+  fragmentSource: string;
+  adventurousness: "conservative" | "moderate" | "wild";
+}
+
+async function handleSuggest(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const origin = request.headers.get("Origin") ?? "";
+  if (!isOriginAllowed(origin, env)) {
+    return jsonResponse({ error: "Forbidden: origin not allowed" }, 403, corsHeaders);
+  }
+
+  let body: SuggestBody;
+  try {
+    body = (await request.json()) as SuggestBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
+  }
+
+  const { fragmentSource, adventurousness } = body;
+  if (typeof fragmentSource !== "string" || !fragmentSource.trim()) {
+    return jsonResponse({ error: "Missing or invalid fragmentSource" }, 400, corsHeaders);
+  }
+  const validAdventurousness = ["conservative", "moderate", "wild"] as const;
+  if (!validAdventurousness.includes(adventurousness)) {
+    return jsonResponse(
+      { error: "Invalid adventurousness (must be conservative, moderate, or wild)" },
+      400,
+      corsHeaders
+    );
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const limits = await getLimits(env);
+
+  const rateLimitResult = await checkRateLimits(env.RATE_LIMIT_KV, ip, limits);
+  if (!rateLimitResult.allowed) {
+    return jsonResponse(
+      {
+        error: "Rate limit exceeded",
+        retryAfter: rateLimitResult.retryAfter,
+      },
+      429,
+      {
+        ...corsHeaders,
+        ...(rateLimitResult.retryAfter ? { "Retry-After": String(rateLimitResult.retryAfter) } : {}),
+      }
+    );
+  }
+
+  const temperature = ADVENTUROUSNESS_TEMPERATURE[adventurousness] ?? 0.7;
+
+  try {
+    const response = await env.AI.run(TEXT_MODEL, {
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert GLSL shader programmer. Suggest one short creative modification for the given fragment shader. Output a single sentence suggestion only — no GLSL code, no markdown.`,
+        },
+        {
+          role: "user",
+          content: `Fragment shader:\n\`\`\`glsl\n${fragmentSource.trim()}\n\`\`\`\n\nSuggest one creative modification (one sentence):`,
+        },
+      ],
+      max_tokens: 128,
+      temperature,
+    });
+
+    const result = response as { response?: string };
+    const suggestion = typeof result.response === "string" ? result.response.trim() : String(result?.response ?? "").trim();
+    const tokensUsed = estimateTokens(fragmentSource + suggestion);
+
+    await incrementRateLimits(env.RATE_LIMIT_KV, ip, tokensUsed);
+
+    return jsonResponse({ suggestion }, 200, corsHeaders);
+  } catch (err) {
+    console.error("AI suggest error:", err);
+    return jsonResponse(
+      {
+        error: "Suggestion failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      },
+      502,
+      corsHeaders
+    );
+  }
+}
+
+interface ApplyDirectiveBody {
+  fragmentSource: string;
+  directive: string;
+  contextShaders?: string[];
+  previousError?: string;
+}
+
+async function handleApplyDirective(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const origin = request.headers.get("Origin") ?? "";
+  if (!isOriginAllowed(origin, env)) {
+    return jsonResponse({ error: "Forbidden: origin not allowed" }, 403, corsHeaders);
+  }
+
+  let body: ApplyDirectiveBody;
+  try {
+    body = (await request.json()) as ApplyDirectiveBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
+  }
+
+  const { fragmentSource, directive, contextShaders, previousError } = body;
+  if (typeof fragmentSource !== "string" || !fragmentSource.trim()) {
+    return jsonResponse({ error: "Missing or invalid fragmentSource" }, 400, corsHeaders);
+  }
+  if (typeof directive !== "string" || !directive.trim()) {
+    return jsonResponse({ error: "Missing or invalid directive" }, 400, corsHeaders);
+  }
+
+  const context = Array.isArray(contextShaders)
+    ? contextShaders.filter((s): s is string => typeof s === "string")
+    : [];
+
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const limits = await getLimits(env);
+
+  const rateLimitResult = await checkRateLimits(env.RATE_LIMIT_KV, ip, limits);
+  if (!rateLimitResult.allowed) {
+    return jsonResponse(
+      {
+        error: "Rate limit exceeded",
+        retryAfter: rateLimitResult.retryAfter,
+      },
+      429,
+      {
+        ...corsHeaders,
+        ...(rateLimitResult.retryAfter ? { "Retry-After": String(rateLimitResult.retryAfter) } : {}),
+      }
+    );
+  }
+
+  const userPrompt = buildApplyDirectiveUserMessage(
+    fragmentSource.trim(),
+    directive.trim(),
+    context,
+    typeof previousError === "string" ? previousError : undefined
+  );
+
+  try {
+    const response = await env.AI.run(TEXT_MODEL, {
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert GLSL shader programmer. Modify the MAIN SHADER according to the DIRECTIVE. REFERENCE SHADERS are for inspiration only — do not copy them wholesale; use ideas from them to inform your edits. Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
+
+Required format:
+- First line: #version 300 es
+- Second line: precision highp float;
+- Required API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
+- End with your main() and fragColor assignment.`,
+        },
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: models.text.maxTokens,
+    });
+
+    const result = response as {
+      response?: string;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+    };
+    const generated = typeof result.response === "string" ? result.response : String(result?.response ?? "");
+    const usage = result.usage;
+    const tokensUsed = usage?.total_tokens ?? estimateTokens(userPrompt + generated);
+
+    await incrementRateLimits(env.RATE_LIMIT_KV, ip, tokensUsed);
+
+    const sanitized = sanitizeGLSL(generated);
+
+    return jsonResponse(
+      {
+        fragmentSource: sanitized,
+        tokensUsed,
+      },
+      200,
+      corsHeaders
+    );
+  } catch (err) {
+    console.error("AI apply-directive error:", err);
+    return jsonResponse(
+      {
+        error: "Apply directive failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      },
+      502,
+      corsHeaders
+    );
+  }
+}
+
+function buildApplyDirectiveUserMessage(
+  fragmentSource: string,
+  directive: string,
+  contextShaders: string[],
+  previousError?: string
+): string {
+  let msg = `MAIN SHADER (the one to edit):
+
+\`\`\`glsl
+${fragmentSource}
+\`\`\`
+
+DIRECTIVE:
+${directive}
+`;
+
+  if (contextShaders.length > 0) {
+    msg += `\nREFERENCE SHADERS (context only — use for inspiration, do not copy wholesale):\n\n`;
+    contextShaders.forEach((src, i) => {
+      msg += `Reference shader ${i + 1}:\n\`\`\`glsl\n${src}\n\`\`\`\n\n`;
+    });
+  }
+
+  if (previousError) {
+    msg += `\nThe previous attempt failed to compile. Fix the error and output corrected GLSL (raw code only, no markdown):\n${previousError}\n\n`;
+  }
+
+  msg += `\nOutput the modified MAIN SHADER as raw GLSL (no \`\`\` fences):`;
   return msg;
 }
 
