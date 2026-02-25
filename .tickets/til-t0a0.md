@@ -1,6 +1,6 @@
 ---
 id: til-t0a0
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-24T20:00:09Z

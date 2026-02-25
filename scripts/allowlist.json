@@ -1,0 +1,16 @@
+{
+  "packages": [
+    "@cloudflare/workers-types",
+    "@playwright/test",
+    "@types/dom-speech-recognition",
+    "@types/node",
+    "concurrently",
+    "jsdom",
+    "mimetext",
+    "tsx",
+    "typescript",
+    "vite",
+    "vitest",
+    "wrangler"
+  ]
+}
