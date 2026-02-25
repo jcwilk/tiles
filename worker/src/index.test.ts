@@ -16,7 +16,13 @@ vi.mock("mimetext", () => ({
 }));
 
 import models from "../models.json";
-import worker, { sanitizeGLSL, getLimits, buildApplyDirectivePrompt } from "./index.js";
+import worker, {
+  sanitizeGLSL,
+  getLimits,
+  buildApplyDirectivePrompt,
+  buildSuggestPrompt,
+  getTemperatureForAdventurousness,
+} from "./index.js";
 import type { Env } from "./index.js";
 
 function createMockKV(initial?: Map<string, string>): KVNamespace & { store: Map<string, string> } {
@@ -571,6 +577,229 @@ describe("worker", () => {
     });
   });
 
+  describe("POST /suggest", () => {
+    it("rejects request without allowed origin", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("origin not allowed");
+    });
+
+    it("rejects invalid JSON body", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: "not json",
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Invalid JSON");
+    });
+
+    it("rejects missing or invalid fragmentSource", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ adventurousness: "moderate" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("fragmentSource");
+    });
+
+    it("rejects empty fragmentSource", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ fragmentSource: "   ", adventurousness: "moderate" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("fragmentSource");
+    });
+
+    it("rejects invalid adventurousness", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          adventurousness: "invalid",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("adventurousness");
+    });
+
+    it("returns suggestion for valid request", async () => {
+      const mockAI = createMockAI("Add a subtle pulse that speeds up on touch.");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "#version 300 es\nprecision highp float;\nvoid main(){ fragColor=vec4(1); }",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { suggestion: string };
+      expect(body.suggestion).toBe("Add a subtle pulse that speeds up on touch.");
+      expect(env.AI.run).toHaveBeenCalled();
+    });
+
+    it("passes conservative temperature (0.3) for adventurousness conservative", async () => {
+      const mockAI = createMockAI("Make the gradient smoother.");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          adventurousness: "conservative",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ temperature: 0.3 })
+      );
+    });
+
+    it("passes moderate temperature (0.7) for adventurousness moderate", async () => {
+      const mockAI = createMockAI("Add plasma effect.");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ temperature: 0.7 })
+      );
+    });
+
+    it("passes wild temperature (1.2) for adventurousness wild", async () => {
+      const mockAI = createMockAI("Combine with fractal noise and rainbow colors.");
+      const env = createEnv({ AI: mockAI });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          adventurousness: "wild",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ temperature: 1.2 })
+      );
+    });
+
+    it("includes fragment source in user prompt", async () => {
+      const mockAI = createMockAI("Add a glow.");
+      const env = createEnv({ AI: mockAI });
+      const fragmentSource = "void main(){ fragColor=vec4(0.5,0,0.5,1); }";
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource,
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(200);
+      expect(env.AI.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: "user",
+              content: expect.stringContaining(fragmentSource),
+            }),
+          ]),
+        })
+      );
+    });
+
+    it("returns 429 when rate limit exceeded", async () => {
+      const now = Date.now();
+      const hourKey = new Date(now).toISOString().slice(0, 13);
+      const kv = createMockKV(
+        new Map([[`ip:1.2.3.4:${hourKey}`, "9000"]])
+      );
+      const env = createEnv({
+        RATE_LIMIT_KV: kv,
+        IP_PER_HOUR: "10000",
+      });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(429);
+      const body = (await res.json()) as { error: string; retryAfter?: number };
+      expect(body.error).toContain("Rate limit");
+    });
+  });
+
   describe("404", () => {
     it("returns 404 for unknown path", async () => {
       const env = createEnv();
@@ -615,6 +844,27 @@ describe("worker", () => {
       expect(typeof body.limits.globalPerHour).toBe("number");
       expect(typeof body.limits.globalPerDay).toBe("number");
     });
+  });
+});
+
+describe("buildSuggestPrompt", () => {
+  it("includes fragment source in prompt", () => {
+    const prompt = buildSuggestPrompt("void main(){ fragColor=vec4(1); }");
+    expect(prompt).toContain("void main(){ fragColor=vec4(1); }");
+    expect(prompt).toContain("GLSL fragment shader");
+    expect(prompt).toContain("1 sentence");
+  });
+});
+
+describe("getTemperatureForAdventurousness", () => {
+  it("returns 0.3 for conservative", () => {
+    expect(getTemperatureForAdventurousness("conservative")).toBe(0.3);
+  });
+  it("returns 0.7 for moderate", () => {
+    expect(getTemperatureForAdventurousness("moderate")).toBe(0.7);
+  });
+  it("returns 1.2 for wild", () => {
+    expect(getTemperatureForAdventurousness("wild")).toBe(1.2);
   });
 });
 

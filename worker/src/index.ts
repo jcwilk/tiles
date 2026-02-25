@@ -95,6 +95,10 @@ export default {
       return handleApplyDirective(request, env, corsHeaders);
     }
 
+    if (url.pathname === "/suggest" && request.method === "POST") {
+      return handleSuggest(request, env, corsHeaders);
+    }
+
     return jsonResponse({ error: "Not Found" }, 404, corsHeaders);
   },
 
@@ -598,6 +602,131 @@ The MAIN SHADER in the user message is the one to edit. REFERENCE SHADERS (if an
       200,
       corsHeaders
     );
+  } catch (err) {
+    console.error("AI run error:", err);
+    return jsonResponse(
+      {
+        error: "AI generation failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      },
+      502,
+      corsHeaders
+    );
+  }
+}
+
+const ADVENTUROUSNESS_VALUES = ["conservative", "moderate", "wild"] as const;
+export type Adventurousness = (typeof ADVENTUROUSNESS_VALUES)[number];
+
+/** Maps adventurousness to AI temperature. Exported for tests. */
+export function getTemperatureForAdventurousness(a: Adventurousness): number {
+  switch (a) {
+    case "conservative":
+      return 0.3;
+    case "moderate":
+      return 0.7;
+    case "wild":
+      return 1.2;
+    default:
+      return 0.7;
+  }
+}
+
+interface SuggestBody {
+  fragmentSource: string;
+  adventurousness: Adventurousness;
+}
+
+/** Exported for tests */
+export function buildSuggestPrompt(fragmentSource: string): string {
+  return `You are looking at this GLSL fragment shader:
+
+\`\`\`glsl
+${fragmentSource}
+\`\`\`
+
+Suggest ONE short creative modification (1 sentence only). Output plain text only — no GLSL code, no markdown. Example: "Add a subtle pulse that speeds up when the user touches the screen."`;
+}
+
+async function handleSuggest(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const origin = request.headers.get("Origin") ?? "";
+  if (!isOriginAllowed(origin, env)) {
+    return jsonResponse({ error: "Forbidden: origin not allowed" }, 403, corsHeaders);
+  }
+
+  let body: SuggestBody;
+  try {
+    body = (await request.json()) as SuggestBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
+  }
+
+  const { fragmentSource, adventurousness } = body;
+  if (typeof fragmentSource !== "string" || !fragmentSource.trim()) {
+    return jsonResponse({ error: "Missing or invalid fragmentSource" }, 400, corsHeaders);
+  }
+  if (
+    typeof adventurousness !== "string" ||
+    !ADVENTUROUSNESS_VALUES.includes(adventurousness as Adventurousness)
+  ) {
+    return jsonResponse(
+      { error: "adventurousness must be 'conservative', 'moderate', or 'wild'" },
+      400,
+      corsHeaders
+    );
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const limits = await getLimits(env);
+
+  const rateLimitResult = await checkRateLimits(env.RATE_LIMIT_KV, ip, limits);
+  if (!rateLimitResult.allowed) {
+    return jsonResponse(
+      {
+        error: "Rate limit exceeded",
+        retryAfter: rateLimitResult.retryAfter,
+      },
+      429,
+      {
+        ...corsHeaders,
+        ...(rateLimitResult.retryAfter ? { "Retry-After": String(rateLimitResult.retryAfter) } : {}),
+      }
+    );
+  }
+
+  const temperature = getTemperatureForAdventurousness(adventurousness as Adventurousness);
+  const userPrompt = buildSuggestPrompt(fragmentSource.trim());
+
+  try {
+    const response = await env.AI.run(TEXT_MODEL, {
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert GLSL shader programmer. Suggest one short creative modification for the given shader. Output plain text only — one sentence, no code, no markdown.",
+        },
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: 64,
+      temperature,
+    });
+
+    const result = response as {
+      response?: string;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+    };
+    const suggestion =
+      typeof result.response === "string" ? result.response.trim() : String(result?.response ?? "").trim();
+    const usage = result.usage;
+    const tokensUsed = usage?.total_tokens ?? estimateTokens(userPrompt + suggestion);
+
+    await incrementRateLimits(env.RATE_LIMIT_KV, ip, tokensUsed);
+
+    return jsonResponse({ suggestion }, 200, corsHeaders);
   } catch (err) {
     console.error("AI run error:", err);
     return jsonResponse(
