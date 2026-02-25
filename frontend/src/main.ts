@@ -112,20 +112,10 @@ function makeMergeHandler(currentTiles: TileElement[]) {
           ];
           tiles = updatedTiles;
         } else {
-          // Merge: remove loading, insert new tile after target
+          // Merge: remove loading, prepend new tile at start of grid (newest-first)
           loadingTile.remove();
-          const insertBefore = targetEl.nextElementSibling;
-          if (insertBefore) {
-            grid.insertBefore(newTile.element, insertBefore);
-          } else {
-            grid.appendChild(newTile.element);
-          }
-          const updatedTiles = [
-            ...currentTiles.slice(0, targetIdx + 1),
-            newTile,
-            ...currentTiles.slice(targetIdx + 1),
-          ];
-          tiles = updatedTiles;
+          grid.insertBefore(newTile.element, grid.firstElementChild);
+          tiles = [newTile, ...currentTiles];
         }
 
         teardownDragDrop?.();
@@ -232,8 +222,8 @@ function createAddTileButton(): HTMLElement {
         openFullscreen(newTile);
       });
 
-      grid.insertBefore(newTile.element, btn);
-      tiles = [...tiles, newTile];
+      grid.insertBefore(newTile.element, grid.firstElementChild);
+      tiles = [newTile, ...tiles];
 
       teardownDragDrop?.();
       const allEls = Array.from(grid.querySelectorAll(".tile"));
