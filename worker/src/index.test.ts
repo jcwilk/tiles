@@ -502,6 +502,32 @@ describe("worker", () => {
       }
     });
 
+    it("returns 502 with timeout message when AI hangs", async () => {
+      const hangingAI = {
+        run: vi.fn(() => new Promise<never>(() => {})),
+      } as unknown as Ai;
+      const env = createEnv({
+        AI: hangingAI,
+        AI_RUN_TIMEOUT_MS: "50",
+      });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:5173",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          adventurousness: "conservative",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(502);
+      const body = (await res.json()) as { error?: string; details?: string };
+      expect(body.details).toBe("AI request timed out");
+    });
+
     it("returns 429 when rate limit exceeded", async () => {
       const now = Date.now();
       const hourKey = new Date(now).toISOString().slice(0, 13);

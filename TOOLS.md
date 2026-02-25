@@ -14,6 +14,7 @@ Run from project root. Symlinks point to `scripts/`.
 | `./ci` | Run `npm ci` from project root. Whitelist this script in Cursor for safe dependency installs. |
 | `./lint` | TypeScript check (`tsc --noEmit`) for frontend and worker. Invokes tsc directly (no npm). |
 | `./test-add-from-voice` | Run add-from-voice Vitest test only. Use for quick pre-deploy validation when Cloudflare deploy failures require re-running this test. |
+| `./ai-probe` | Probe AI endpoints (suggest, generate, apply-directive). Verifies worker responds or fails with timeout instead of hanging. Requires worker running. `AI_PROBE_URL` (default http://localhost:8787). Run `./ai-probe all` or `./ai-probe suggest`. |
 
 ### Cost monitoring (`./rl cost`)
 
