@@ -12,6 +12,7 @@ import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
 import { performAddFromVoice } from "./add-from-voice.js";
 import { isBuiltInTile } from "./builtin.js";
 import type { ShaderObject } from "./types.js";
+import { sortShadersNewestFirst } from "./order.js";
 
 const appEl = document.getElementById("app");
 if (!appEl) throw new Error("Missing #app");
@@ -62,12 +63,8 @@ function makeMergeHandler(currentTiles: TileElement[]) {
       if (isEdit) {
         targetEl.replaceWith(loadingTile);
       } else {
-        const insertBefore = targetEl.nextElementSibling;
-        if (insertBefore) {
-          grid.insertBefore(loadingTile, insertBefore);
-        } else {
-          grid.appendChild(loadingTile);
-        }
+        // Newest-first: place loading at start of grid
+        grid.insertBefore(loadingTile, grid.firstChild);
       }
 
       teardownDragDrop?.();
@@ -112,20 +109,10 @@ function makeMergeHandler(currentTiles: TileElement[]) {
           ];
           tiles = updatedTiles;
         } else {
-          // Merge: remove loading, insert new tile after target
+          // Merge: remove loading, prepend new tile (newest-first)
           loadingTile.remove();
-          const insertBefore = targetEl.nextElementSibling;
-          if (insertBefore) {
-            grid.insertBefore(newTile.element, insertBefore);
-          } else {
-            grid.appendChild(newTile.element);
-          }
-          const updatedTiles = [
-            ...currentTiles.slice(0, targetIdx + 1),
-            newTile,
-            ...currentTiles.slice(targetIdx + 1),
-          ];
-          tiles = updatedTiles;
+          grid.insertBefore(newTile.element, grid.firstChild);
+          tiles = [newTile, ...currentTiles];
         }
 
         teardownDragDrop?.();
@@ -232,8 +219,9 @@ function createAddTileButton(): HTMLElement {
         openFullscreen(newTile);
       });
 
-      grid.insertBefore(newTile.element, btn);
-      tiles = [...tiles, newTile];
+      // Newest-first: prepend at start of grid
+      grid.insertBefore(newTile.element, grid.firstChild);
+      tiles = [newTile, ...tiles];
 
       teardownDragDrop?.();
       const allEls = Array.from(grid.querySelectorAll(".tile"));
@@ -293,8 +281,7 @@ async function init(): Promise<void> {
   storage = createIndexedDBStorage();
   await seedIfEmpty(storage);
   const shaders = await storage.getAll();
-
-  renderGrid(shaders);
+  renderGrid(sortShadersNewestFirst(shaders));
 
   window.addEventListener("popstate", handlePopState);
 
