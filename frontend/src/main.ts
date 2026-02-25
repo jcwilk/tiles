@@ -295,6 +295,10 @@ function closeFullscreen(): void {
 }
 
 function handlePopState(): void {
+  const hash = window.location.hash.slice(1);
+  if (hash.startsWith("edit/")) {
+    return;
+  }
   if (isEditViewOpen()) {
     closeEditView();
     return;
@@ -302,6 +306,14 @@ function handlePopState(): void {
   if (fullscreenOverlay) {
     closeFullscreen();
   }
+}
+
+export function __testHandlePopState(): void {
+  handlePopState();
+}
+export function __testSetFullscreenState(overlay: HTMLElement | null, tile: TileElement | null): void {
+  fullscreenOverlay = overlay;
+  fullscreenTile = tile;
 }
 
 async function init(): Promise<void> {
@@ -313,9 +325,31 @@ async function init(): Promise<void> {
   window.addEventListener("popstate", handlePopState);
 
   if (window.location.hash) {
-    const id = window.location.hash.slice(1);
-    const tile = tiles.find((t) => t.shader.id === id);
-    if (tile) openFullscreen(tile);
+    const hash = window.location.hash.slice(1);
+    if (hash.startsWith("edit/")) {
+      const id = hash.slice(5);
+      const tile = tiles.find((t) => t.shader.id === id);
+      if (tile) {
+        history.replaceState(null, "", "#");
+        openFullscreen(tile);
+        openEditView(tile.shader, storage!, {
+          onSave: (updated) => {
+            if (fullscreenTile) {
+              disposeTile(fullscreenTile);
+              const newTile = createTile(updated);
+              newTile.element.classList.add("tile");
+              newTile.element.addEventListener("click", (e) => e.stopPropagation());
+              fullscreenTile.element.replaceWith(newTile.element);
+              fullscreenTile = newTile;
+            }
+          },
+        });
+      }
+    } else {
+      const id = hash;
+      const tile = tiles.find((t) => t.shader.id === id);
+      if (tile) openFullscreen(tile);
+    }
   }
 }
 

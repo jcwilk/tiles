@@ -34,3 +34,10 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   (globalThis as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
     ResizeObserverMock as unknown as typeof ResizeObserver;
 }
+
+// Ensure #app exists for main.ts (navigation tests)
+if (!document.getElementById("app")) {
+  const app = document.createElement("div");
+  app.id = "app";
+  document.body.appendChild(app);
+}

@@ -115,4 +115,15 @@ describe("edit-view", () => {
     cancelBtn!.click();
     expect(backSpy).toHaveBeenCalled();
   });
+
+  it("close (X) button triggers history.back", () => {
+    const backSpy = vi.spyOn(history, "back").mockImplementation(() => {});
+
+    openEditView(MOCK_SHADER, storage);
+    const closeBtn = document.querySelector<HTMLButtonElement>(".edit-view-close");
+    expect(closeBtn).toBeTruthy();
+
+    closeBtn!.click();
+    expect(backSpy).toHaveBeenCalled();
+  });
 });
