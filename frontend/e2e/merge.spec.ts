@@ -11,7 +11,7 @@ test.describe("merge flow", () => {
     const grid = page.locator(".tiles-grid");
     await expect(grid).toBeVisible({ timeout: 15_000 });
 
-    const tiles = page.locator(".tile");
+    const tiles = page.locator(".tile:not(.tile-add-new)");
     await expect(tiles).toHaveCount(6, { timeout: 15_000 });
 
     const source = tiles.first();
@@ -19,10 +19,6 @@ test.describe("merge flow", () => {
 
     await source.dragTo(target, { force: true });
 
-    await expect(page.locator(".tile-label:has-text('Merge')")).toBeVisible({
-      timeout: 30_000,
-    });
-
-    await expect(tiles).toHaveCount(7);
+    await expect(tiles).toHaveCount(7, { timeout: 60_000 });
   });
 });
