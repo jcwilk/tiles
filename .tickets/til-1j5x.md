@@ -2,62 +2,55 @@
 id: til-1j5x
 status: open
 deps: []
-links: []
+links: [til-g3qa]
 created: 2026-02-26T00:26:01Z
 type: bug
-priority: 1
+priority: 2
 assignee: John Wilkinson
-parent: til-n5ip
 ---
 # Fix: tile delete button click triggers fullscreen instead of deleting
 
-When clicking the delete button (×) on a tile in the grid view, instead of deleting the tile, it opens the tile in fullscreen. The fullscreen click handler on the tile element is taking precedence over the delete button's click handler.
+When clicking the delete button (×) on a tile in grid view, the tile opens fullscreen instead of being deleted.
 
-## Current implementation:
+## Existing guards (already in code)
 
-### Click handler (main.ts ~line 99-101):
-```typescript
-tile.element.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement).closest?.('.tile-delete')) return;
-  openFullscreen(newTile);
-});
-```
+The codebase already has two layers of defense — both should prevent this bug:
 
-### Delete button (tile.ts ~line 42-52):
-- Button with class `.tile-delete`
-- Has its own click handler that calls `onDelete` callback
-- Calls `e.stopPropagation()` to prevent bubbling
+1. **`main.ts`** (6 instances): `if ((e.target as HTMLElement).closest?.('.tile-delete')) return;` before `openFullscreen()`
+2. **`tile.ts`** (2 instances): `e.stopPropagation()` on the delete button's click handler
 
-## Likely root cause:
-The `closest('.tile-delete')` check in the tile click handler or the `stopPropagation()` in the delete button handler isn't working correctly. Possible issues:
-- The `e.target` might not be the button itself if the × text node is clicked
-- CSS `pointer-events` might be interfering
-- The delete button might be covered by another element (z-index issue)
-- The tile's click handler might be using event capture phase instead of bubble phase
-- The `.closest()` check might fail due to shadow DOM or element structure
+If both guards are present and correct, this bug should not occur. The first step is to reproduce and confirm.
 
-## General principle to enforce:
-**Any interactive buttons/controls on a tile (delete, edit, etc.) must ALWAYS take precedence over the tile's click-to-fullscreen behavior.** This should be robust — use stopPropagation AND check in the parent handler, and ensure z-index/pointer-events are correct.
+## Reproduction required (step 1)
 
-## Fix approach:
-1. Verify the delete button element structure and that `.closest('.tile-delete')` works
-2. Ensure `stopPropagation()` and `preventDefault()` are called on button click
-3. Consider using `pointer-events: all` on buttons and checking `e.target` more carefully
-4. Add a general guard: any click on a `.tile-delete`, `.tile-edit`, or similar control class should never propagate to the fullscreen handler
-5. Ensure the delete button has sufficient z-index and is not covered by overlay elements
+Before writing any fix, reproduce the bug:
 
-## Verification:
-- Click delete (×) on a tile in grid view → tile is deleted, NOT fullscreened
-- Click on the tile itself (not on any button) → tile opens fullscreen
-- Test on both desktop and mobile (touch events)
-- Rapid clicking should not cause race conditions
+1. Run `npm run dev`, open `http://localhost:5173`
+2. Ensure at least one tile with a delete button is visible in the grid
+3. Open DevTools → Elements, inspect the `×` button, confirm it has class `tile-delete` and is a direct child of `.tile`
+4. Open DevTools → Console, add a breakpoint or `console.log` in both the tile click handler and the delete button handler
+5. Click the `×` button — observe which handler(s) fire and in what order
+6. If the bug does NOT reproduce: close this ticket. If it does: record browser, OS, and whether it's mouse or touch
+
+## Likely root causes (if reproducible)
+
+- CSS `pointer-events: none` on `.tile-delete` or an ancestor
+- An overlay element (z-index) sitting on top of the delete button, stealing the click
+- `e.target` being a text node inside the button (`.closest` works on text nodes via parentElement, so this is unlikely — but verify)
+- The tile click handler registered with `{ capture: true }` (it isn't currently, but check)
+
+## Fix approach (only after reproduction)
+
+1. Confirm the element structure: `×` button is reachable and clickable
+2. Add `pointer-events: all` to `.tile-delete` in CSS as a safety net
+3. Broaden the guard in `main.ts` to check `.closest('.tile-delete, .tile-controls')` for future-proofing
+4. Add `preventDefault()` alongside `stopPropagation()` in the button handler
 
 ## Acceptance Criteria
 
-1. Clicking delete button on a tile in grid view deletes the tile (not fullscreens it)
-2. Clicking on the tile body (outside buttons) still opens fullscreen
-3. All tile overlay buttons (delete, future controls) take precedence over tile click
-4. Works on desktop and mobile
-5. Tests cover button click vs tile click behavior
-6. No regression in fullscreen opening
+1. Bug is reproduced (or ticket is closed as not-reproducible)
+2. If reproduced: clicking delete deletes the tile, not fullscreens it
+3. Clicking tile body (outside buttons) still opens fullscreen
+4. Tests cover button click vs tile click behavior
+5. No regression in fullscreen opening
 

@@ -5,41 +5,47 @@ deps: []
 links: []
 created: 2026-02-26T00:24:43Z
 type: bug
-priority: 1
+priority: 2
 assignee: John Wilkinson
-parent: til-n5ip
 ---
 # Cap AI suggestion temperatures (0.1 / 0.2 / 0.3 max)
 
-The third auto-generated suggestion option ("wild" tier) in the edit view produces random gobbledygook — likely because the temperature is way too high (currently 1.2). The temperature settings need to be drastically reduced across all tiers.
+The "wild" suggestion tier produces gibberish because its temperature (1.2) is too high. All tiers need to be reduced.
 
-## Current values (worker/src/index.ts ~line 297):
+## Current values (worker/src/index.ts ~line 297)
+
 - conservative: 0.3
 - moderate: 0.7
 - wild: 1.2
+- Fallback default on line 356: `?? 0.7`
 
-## New values (hard caps):
-- conservative: 0.1 (most deterministic — should produce very predictable, safe modifications)
-- moderate: 0.2 (middle ground — slightly more creative but still coherent)
-- wild: 0.3 (maximum creativity allowed — should still produce valid, meaningful shader code, NOT random nonsense)
+## New values (hard caps)
 
-## Key constraint:
-Temperature should NEVER exceed 0.3 anywhere in the codebase. This is a hard cap. If there are any other places where temperature is set or configurable, they must also respect this ceiling.
+- conservative: 0.1
+- moderate: 0.2
+- wild: 0.3
+- Fallback default: `?? 0.2` (must also respect the 0.3 ceiling)
 
-## Location:
+## Key constraint
+
+Temperature must NEVER exceed 0.3 anywhere in the codebase. The fallback on line 356 (`ADVENTUROUSNESS_TEMPERATURE[adventurousness] ?? 0.7`) must also be updated.
+
+## Location
+
 - `worker/src/index.ts` — `ADVENTUROUSNESS_TEMPERATURE` record (~line 297-301)
-- Used in the `/suggest` endpoint when calling AI.run()
+- `worker/src/index.ts` — fallback default (~line 356)
 
-## Verification:
-- Generate suggestions in edit view for multiple tiles
-- All three tiers should produce coherent, meaningful shader modification suggestions
-- The 'wild' option should be creative but not gibberish
-- grep for 'temperature' in the codebase and confirm no value exceeds 0.3
+## Verification
+
+- `grep -rn 'temperature' worker/` — confirm no value exceeds 0.3
+- `npm test` — all tests pass
+- `npm run lint` — lint passes
+- Live AI verification (coherent suggestions) requires Cloudflare credentials and is out of scope for local dev; manual QA against deployed worker if available
 
 ## Acceptance Criteria
 
-1. ADVENTUROUSNESS_TEMPERATURE values updated to conservative=0.1, moderate=0.2, wild=0.3
-2. No temperature value in the codebase exceeds 0.3
-3. All three suggestion tiers produce coherent, valid suggestions
+1. `ADVENTUROUSNESS_TEMPERATURE` values: conservative=0.1, moderate=0.2, wild=0.3
+2. Fallback default changed from 0.7 to 0.2
+3. No temperature value in the codebase exceeds 0.3
 4. Tests pass, lint passes
 

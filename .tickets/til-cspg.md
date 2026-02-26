@@ -1,56 +1,46 @@
 ---
 id: til-cspg
 status: open
-deps: [til-lcau]
-links: []
+deps: []
+links: [til-lcau]
 created: 2026-02-26T00:25:32Z
 type: feature
 priority: 1
 assignee: John Wilkinson
-parent: til-n5ip
+parent: til-lcau
 ---
 # WebGL crash detection and graceful fallback placeholders
 
-There is currently no handling for when WebGL contexts are lost (crash). When a context is lost (due to resource exhaustion, GPU driver issues, or OS reclamation), the tile just goes black or displays garbage with no recovery path. Users have no indication of what happened.
+There is currently no handling for when WebGL contexts are lost. When a context is lost (resource exhaustion, GPU driver issues, OS reclamation), the tile goes black with no recovery path. This ticket adds detection, a placeholder, and click-to-recover — all standalone, no pool dependency.
 
-## Current behavior:
-- `shader-engine.ts` checks for WebGL2 support at creation time but does not listen for context loss events
-- No `webglcontextlost` / `webglcontextrestored` event listeners
+## Current behavior
+
+- `shader-engine.ts` checks for WebGL2 support at creation time but never listens for `webglcontextlost` / `webglcontextrestored`
 - No visual fallback when a context dies
-- User has to reload the page to recover
+- User must reload the page
 
-## Desired behavior:
-1. **Detect context loss** — Listen for `webglcontextlost` on every canvas. When fired, mark the tile as 'crashed'.
-2. **Show placeholder** — Replace the broken canvas with a visual placeholder (e.g., a static thumbnail of the last good frame, or a styled div with a 'paused' indicator and the tile's directive text).
-3. **Recover on interaction** — When the user clicks/taps a crashed tile, attempt to restore the WebGL context. If the context pool (from the pooling ticket) has capacity, re-acquire a context and restart the shader.
-4. **Automatic recovery** — When context pool frees up (e.g., user scrolls and other tiles release contexts), automatically try to restore crashed tiles that are in the viewport.
-5. **User feedback** — Brief toast or visual cue when tiles are paused due to resource limits ('Some tiles paused to save resources' or similar).
+## Change
 
-## Technical approach:
-- Add `webglcontextlost` and `webglcontextrestored` event listeners in `shader-engine.ts` or `tile.ts`
-- Capture last rendered frame as a data URL or ImageBitmap before context loss (if possible) or on a periodic basis
-- Integrate with the context pool (depends on WebGL context pooling ticket)
+1. **Detect context loss** — add `webglcontextlost` and `webglcontextrestored` event listeners on every tile canvas (in `shader-engine.ts` or `tile.ts`). Call `e.preventDefault()` in the loss handler so the browser allows later restoration.
+2. **Snapshot on idle** — capture a single `canvas.toDataURL()` when the tile first renders successfully (or on dispose). Do NOT snapshot periodically on a timer — one snapshot per tile lifetime is enough and avoids the performance cost of repeated `toDataURL` on 20+ canvases.
+3. **Show placeholder on loss** — swap the canvas for an `<img>` of the last-good snapshot (or a styled "paused" div if no snapshot exists). Overlay a "click to resume" affordance.
+4. **Click-to-recover** — on click, call `WEBGL_lose_context.restoreContext()` if available, or re-create the shader engine from scratch. If context creation fails (cap reached), show a toast ("Too many active shaders — close some tiles").
+5. **No automatic pool-based recovery** — that will be wired in when the context pool (wor-n8kl) ships. This ticket only handles manual click-to-recover.
 
-## Testing strategy:
-- Simulate context loss via `WEBGL_lose_context` extension (`gl.getExtension('WEBGL_lose_context').loseContext()`)
-- Test placeholder display
-- Test recovery after simulated restore
-- Test interaction-triggered recovery
+## Testing strategy
 
-## Design
-
-1. Add webglcontextlost/restored listeners to ShaderEngine
-2. Periodically snapshot last good frame (e.g., every 5s or on pause)
-3. On loss: swap canvas for placeholder image + 'click to resume' overlay
-4. On click: request context from pool, rebuild shader engine
-5. Integrate with IntersectionObserver from pooling ticket for auto-recovery
+- Simulate context loss via `gl.getExtension('WEBGL_lose_context').loseContext()`
+- Verify placeholder appears
+- Simulate restore via `restoreContext()`, verify tile recovers
+- Verify click-to-recover path
+- Verify no console errors on loss/restore cycle
 
 ## Acceptance Criteria
 
-1. Context loss is detected and handled gracefully (no black screens or errors)
+1. `webglcontextlost` is detected and handled (no black screens, no console errors)
 2. Placeholder shown with last-good-frame snapshot or styled fallback
-3. User can click to recover a paused tile
-4. Automatic recovery when resources free up
-5. Context loss can be simulated in tests via WEBGL_lose_context
-6. All tests pass, no console errors on context loss
+3. User can click a paused tile to attempt recovery
+4. Recovery failure shows user feedback (toast)
+5. Context loss can be simulated in tests via `WEBGL_lose_context`
+6. All tests pass, lint passes
 

@@ -7,38 +7,49 @@ created: 2026-02-26T00:24:33Z
 type: task
 priority: 1
 assignee: John Wilkinson
-parent: til-n5ip
 ---
 # Remove voice/transcription interface entirely
 
-Pull ALL transcription and voice interface code out of the repo. The app should only support text-based interaction: combining tiles (drag-and-drop merge), entering directives (text input), and selecting directives (suggestion cards). There should be zero voice/audio/transcription functionality remaining.
+Remove all voice/audio/transcription code. The app should only support text input (directives) and suggestion cards.
 
 ## Scope
 
-### Frontend files to remove or clean:
-- `frontend/src/add-from-voice.ts` — entire file (MediaRecorder audio capture, base64 encoding, /transcribe API call)
-- `frontend/src/speech-recognition.ts` — entire file (browser SpeechRecognition / webkitSpeechRecognition wrapper)
-- `frontend/src/edit-view.ts` — remove mic button, voice input toggle, all speech recognition integration (lines ~126-165 and related imports/event handlers)
-- Any CSS related to mic buttons or voice recording UI
+### Files to delete entirely
 
-### Worker endpoints to remove:
-- `worker/src/index.ts` — remove the `/transcribe` endpoint (Whisper AI call) and its route handling
-- `frontend/src/api.ts` — remove the `transcribeAudio()` function (POST /transcribe client)
+- `frontend/src/add-from-voice.ts` — MediaRecorder capture, base64 encoding, /transcribe API call
+- `frontend/src/speech-recognition.ts` — browser SpeechRecognition wrapper
+- `frontend/src/add-from-voice.test.ts` — tests for the above
+- `frontend/src/speech-recognition.test.ts` — tests for the above
 
-### Tests to update:
-- Remove or update any tests referencing voice, transcription, audio, mic, SpeechRecognition, or the /transcribe endpoint
+### Files to edit
 
-### Verification:
-- grep the entire repo for: transcri, voice, speech, microphone, audio, MediaRecorder, getUserMedia, webkitSpeechRecognition, whisper, mic — ensure zero hits in application code
-- All remaining tests pass
-- Lint passes
-- Edit view still works with text input and suggestion cards
+- **`frontend/src/edit-view.ts`** (critical): remove imports from `speech-recognition.ts` and `add-from-voice.ts` (lines 8-12), remove mic button creation (~line 119), remove `speechStop` state and all speech recognition event handling (~lines 124-163). The edit view must still work with the text input and suggestion cards. This is the most error-prone part — the mic button handler is interleaved with the directive input UI.
+- **`frontend/src/edit-view.test.ts`**: remove or update any test cases that exercise voice/mic functionality
+- **`frontend/src/api.ts`**: remove the `transcribeAudio()` function and its import/export
+- **`worker/src/index.ts`**: remove the `/transcribe` endpoint (Whisper AI call) and its route handling
+- **`worker/src/index.test.ts`**: remove any test cases for the `/transcribe` endpoint
+
+### CSS
+
+- Remove any styles targeting mic buttons or voice recording UI (check `frontend/src/style.css` or wherever styles live)
+
+## Verification
+
+```bash
+# Must return zero hits in application code (test fixtures/mocks are OK)
+rg -i 'transcri|voice|speech|microphone|getUserMedia|webkitSpeechRecognition|whisper' \
+  --glob '!node_modules' --glob '!*.test.ts' frontend/src/ worker/src/
+```
+
+- `npm test` — all remaining tests pass
+- `npm run lint` — lint passes
+- Manual: open edit view → text input and suggestion cards work, no mic button visible
 
 ## Acceptance Criteria
 
 1. All voice/transcription code removed from frontend and worker
-2. No references to transcription, voice, speech, microphone, audio recording in app code
+2. No references to voice/speech/transcription in non-test application code
 3. Edit view works correctly with text directives and suggestion cards only
 4. All tests pass, lint passes
-5. /transcribe endpoint no longer exists in worker
+5. `/transcribe` endpoint no longer exists in worker
 
