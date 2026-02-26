@@ -9,6 +9,30 @@ import models from "../models.json";
 const TEXT_MODEL = models.text.id as keyof AiModels;
 const WHISPER_MODEL = models.whisper.id as keyof AiModels;
 
+/** Timeout for AI.run() to prevent infinite hang (e.g. missing credentials, network issues) */
+const AI_RUN_TIMEOUT_MS = 60_000;
+
+/**
+ * Run AI model with timeout. Prevents indefinite hang when Workers AI
+ * never returns (e.g. local dev without credentials, network issues).
+ * Use env.AI_RUN_TIMEOUT_MS to override for testing.
+ */
+async function runWithTimeout<T>(
+  ai: Ai,
+  model: keyof AiModels,
+  options: object,
+  env: Env
+): Promise<T> {
+  const ms = parseInt(env.AI_RUN_TIMEOUT_MS ?? "", 10) || AI_RUN_TIMEOUT_MS;
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("AI request timed out")), ms);
+  });
+  return Promise.race([
+    ai.run(model, options as Record<string, unknown>) as Promise<T>,
+    timeout,
+  ]);
+}
+
 /** Allowed origins: GitHub Pages (*.github.io) and localhost for dev */
 const ALLOWED_ORIGIN_PATTERNS = [
   /^https:\/\/[a-zA-Z0-9-]+\.github\.io(\/.*)?$/,
@@ -38,6 +62,8 @@ export interface Env {
   IP_PER_HOUR?: string;
   GLOBAL_PER_HOUR?: string;
   GLOBAL_PER_DAY?: string;
+  /** Override AI timeout (ms) for testing; default 60000 */
+  AI_RUN_TIMEOUT_MS?: string;
 }
 
 /** Get limits with fallback: KV config:limits -> env vars -> defaults. Exported for tests. */
@@ -161,7 +187,9 @@ async function handleTranscribe(
   }
 
   try {
-    const response = (await env.AI.run(WHISPER_MODEL, { audio: audioBytes })) as { text?: string };
+    const response = (await runWithTimeout(env.AI, WHISPER_MODEL, { audio: audioBytes }, env)) as {
+      text?: string;
+    };
     const text = typeof response.text === "string" ? response.text.trim() : "";
     return jsonResponse({ text }, 200, corsHeaders);
   } catch (err) {
@@ -225,11 +253,14 @@ async function handleGenerateFromPrompt(
   const userPrompt = buildGenerateFromPromptUserMessage(prompt.trim(), previousError);
 
   try {
-    const response = await env.AI.run(TEXT_MODEL, {
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert GLSL shader programmer. You generate WebGL fragment shaders from natural language descriptions.
+    const response = await runWithTimeout(
+      env.AI,
+      TEXT_MODEL,
+      {
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert GLSL shader programmer. You generate WebGL fragment shaders from natural language descriptions.
 
 CRITICAL: Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
 Required format:
@@ -237,11 +268,13 @@ Required format:
 - Second line: precision highp float;
 - Required API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
 - End with your main() and fragColor assignment.`,
-        },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: models.text.maxTokens,
-    });
+          },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: models.text.maxTokens,
+      },
+      env
+    );
 
     const result = response as {
       response?: string;
@@ -356,20 +389,25 @@ async function handleSuggest(
   const temperature = ADVENTUROUSNESS_TEMPERATURE[adventurousness] ?? 0.7;
 
   try {
-    const response = await env.AI.run(TEXT_MODEL, {
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert GLSL shader programmer. Suggest one short creative modification for the given fragment shader. Output a single sentence suggestion only — no GLSL code, no markdown.`,
-        },
-        {
-          role: "user",
-          content: `Fragment shader:\n\`\`\`glsl\n${fragmentSource.trim()}\n\`\`\`\n\nSuggest one creative modification (one sentence):`,
-        },
-      ],
-      max_tokens: 128,
-      temperature,
-    });
+    const response = await runWithTimeout(
+      env.AI,
+      TEXT_MODEL,
+      {
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert GLSL shader programmer. Suggest one short creative modification for the given fragment shader. Output a single sentence suggestion only — no GLSL code, no markdown.`,
+          },
+          {
+            role: "user",
+            content: `Fragment shader:\n\`\`\`glsl\n${fragmentSource.trim()}\n\`\`\`\n\nSuggest one creative modification (one sentence):`,
+          },
+        ],
+        max_tokens: 128,
+        temperature,
+      },
+      env
+    );
 
     const result = response as { response?: string };
     const suggestion = typeof result.response === "string" ? result.response.trim() : String(result?.response ?? "").trim();
@@ -453,22 +491,27 @@ async function handleApplyDirective(
   );
 
   try {
-    const response = await env.AI.run(TEXT_MODEL, {
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert GLSL shader programmer. Modify the MAIN SHADER according to the DIRECTIVE. REFERENCE SHADERS are for inspiration only — do not copy them wholesale; use ideas from them to inform your edits. Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
+    const response = await runWithTimeout(
+      env.AI,
+      TEXT_MODEL,
+      {
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert GLSL shader programmer. Modify the MAIN SHADER according to the DIRECTIVE. REFERENCE SHADERS are for inspiration only — do not copy them wholesale; use ideas from them to inform your edits. Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
 
 Required format:
 - First line: #version 300 es
 - Second line: precision highp float;
 - Required API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
 - End with your main() and fragColor assignment.`,
-        },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: models.text.maxTokens,
-    });
+          },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: models.text.maxTokens,
+      },
+      env
+    );
 
     const result = response as {
       response?: string;
@@ -626,11 +669,14 @@ async function handleGenerate(
   const prompt = buildMergePrompt(fragmentA, fragmentB, typeof previousError === "string" ? previousError : undefined);
 
   try {
-    const response = await env.AI.run(TEXT_MODEL, {
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert GLSL shader programmer. You combine fragment shaders into new, creative WebGL shaders.
+    const response = await runWithTimeout(
+      env.AI,
+      TEXT_MODEL,
+      {
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert GLSL shader programmer. You combine fragment shaders into new, creative WebGL shaders.
 
 CRITICAL: Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
 Required format:
@@ -638,11 +684,13 @@ Required format:
 - Second line: precision highp float;
 - Required API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
 - End with your main() and fragColor assignment.`,
-        },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: models.text.maxTokens,
-    });
+          },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: models.text.maxTokens,
+      },
+      env
+    );
 
     const result = response as { response?: string; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
     const generated = typeof result.response === "string" ? result.response : String(result?.response ?? "");

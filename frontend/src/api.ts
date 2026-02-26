@@ -5,6 +5,29 @@
  */
 import { getApiUrl } from "./env.js";
 
+/** Timeout for AI-dependent requests (worker has 60s; allow extra for network) */
+const AI_REQUEST_TIMEOUT_MS = 90_000;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  ms = AI_REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    return res;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Request timed out");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export interface GenerateResponse {
   fragmentSource: string;
   tokensUsed?: number;
@@ -22,7 +45,7 @@ export interface GenerateError {
 
 export async function transcribeAudio(audioBase64: string): Promise<TranscribeResponse> {
   const url = `${getApiUrl()}/transcribe`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ audioBase64 }),
@@ -53,7 +76,7 @@ export async function generateFromPrompt(
     body.previousError = previousError;
   }
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -85,7 +108,7 @@ export async function generateMerge(
     body.previousError = previousError;
   }
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -117,7 +140,7 @@ export async function fetchSuggestion(
   adventurousness: Adventurousness
 ): Promise<SuggestResponse> {
   const url = `${getApiUrl()}/suggest`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fragmentSource, adventurousness }),
@@ -161,7 +184,7 @@ export async function applyDirective(
     body.previousError = previousError;
   }
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
