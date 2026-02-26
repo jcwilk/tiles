@@ -3,7 +3,7 @@
  * generate shader from prompt, compile and save.
  */
 import { transcribeAudio, generateFromPrompt } from "./api.js";
-import { createShaderEngine } from "./shader-engine.js";
+import { compileCheck } from "./validation-context.js";
 import { showToast } from "./toast.js";
 import type { ShaderObject } from "./types.js";
 import type { ShaderStorage } from "./storage.js";
@@ -23,13 +23,6 @@ function stripMarkdownFences(raw: string): string {
   const m = s.match(/^```(?:glsl)?\s*\n?([\s\S]*?)\n?```\s*$/m);
   if (m) return m[1].trim();
   return s.replace(/^```(?:glsl)?\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
-}
-
-function createTempCanvas(): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  return canvas;
 }
 
 export interface AddFromVoiceResult {
@@ -144,14 +137,9 @@ export async function processAudioBlob(
         const { fragmentSource: raw } = await generateFromPrompt(text, previousError);
         const fragmentSource = stripMarkdownFences(raw);
 
-        const canvas = createTempCanvas();
-        const result = createShaderEngine({
-          canvas,
-          vertexSource: DEFAULT_VERTEX,
-          fragmentSource,
-        });
+        const result = compileCheck(fragmentSource, DEFAULT_VERTEX);
 
-        if (result.success) {
+        if (result.ok) {
           const shader: ShaderObject = {
             id: crypto.randomUUID(),
             name: text.slice(0, 50) + (text.length > 50 ? "…" : ""),

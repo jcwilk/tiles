@@ -11,7 +11,7 @@ function stripMarkdownFences(raw: string): string {
   if (m) return m[1].trim();
   return s.replace(/^```(?:glsl)?\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
 }
-import { createShaderEngine } from "./shader-engine.js";
+import { compileCheck } from "./validation-context.js";
 import { showToast } from "./toast.js";
 import type { ShaderObject } from "./types.js";
 import type { ShaderStorage } from "./storage.js";
@@ -27,13 +27,6 @@ void main() {
   gl_Position = vec4(a_position, 0.0, 1.0);
 }
 `;
-
-function createTempCanvas(): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  return canvas;
-}
 
 export interface MergeResult {
   success: boolean;
@@ -55,14 +48,9 @@ export async function performMerge(
       const { fragmentSource: raw } = await generateMerge(fragmentA, fragmentB, previousError);
       const fragmentSource = stripMarkdownFences(raw);
 
-      const canvas = createTempCanvas();
-      const result = createShaderEngine({
-        canvas,
-        vertexSource: DEFAULT_VERTEX,
-        fragmentSource,
-      });
+      const result = compileCheck(fragmentSource, DEFAULT_VERTEX);
 
-      if (result.success) {
+      if (result.ok) {
         const isEdit = sourceShader.id === targetShader.id;
         const shader: ShaderObject = isEdit
           ? {
