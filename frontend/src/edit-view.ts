@@ -4,31 +4,8 @@
 import { createTile, disposeTile, type TileElement } from "./tile.js";
 import { fetchSuggestions } from "./suggest.js";
 import { performApplyDirective } from "./apply-directive.js";
-import {
-  startSpeechRecognition,
-  isSpeechRecognitionSupported,
-} from "./speech-recognition.js";
-import { recordAudio } from "./add-from-voice.js";
-import { transcribeAudio } from "./api.js";
 import type { ShaderObject } from "./types.js";
 import type { ShaderStorage } from "./storage.js";
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result;
-      if (typeof result === "string") {
-        const base64 = result.split(",")[1];
-        resolve(base64 ?? "");
-      } else {
-        reject(new Error("Failed to read blob"));
-      }
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
 
 export interface EditViewCallbacks {
   onNewShader: (shader: ShaderObject) => void;
@@ -115,58 +92,7 @@ export function openEditView(
     if (visible) directiveInput.focus();
   });
 
-  const micBtn = document.createElement("button");
-  micBtn.setAttribute("aria-label", "Voice input");
-  micBtn.textContent = "🎤";
-  micBtn.style.cssText =
-    "width:2.5rem;height:2.5rem;border-radius:50%;border:none;background:rgba(255,255,255,0.2);color:#fff;font-size:1.1rem;cursor:pointer";
-
-  let speechStop: (() => void) | null = null;
-
-  micBtn.addEventListener("click", async () => {
-    if (speechStop) {
-      speechStop();
-      micBtn.classList.remove("edit-mic-active");
-      speechStop = null;
-      return;
-    }
-
-    if (isSpeechRecognitionSupported()) {
-      directiveInput.classList.add("visible");
-      directiveInput.focus();
-      micBtn.classList.add("edit-mic-active");
-      speechStop = startSpeechRecognition(
-        (interim) => {
-          directiveInput.value = interim;
-        },
-        (final) => {
-          if (final) directiveInput.value = final;
-          micBtn.classList.remove("edit-mic-active");
-          speechStop = null;
-        }
-      ).stop;
-    } else {
-      micBtn.classList.add("edit-mic-active");
-      const { promise, stop } = recordAudio();
-      speechStop = stop;
-      try {
-        const blob = await promise;
-        const base64 = await blobToBase64(blob);
-        const { text } = await transcribeAudio(base64);
-        directiveInput.classList.add("visible");
-        directiveInput.value = text;
-        directiveInput.focus();
-      } catch {
-        /* ignore */
-      } finally {
-        micBtn.classList.remove("edit-mic-active");
-        speechStop = null;
-      }
-    }
-  });
-
   actions.appendChild(pencilBtn);
-  actions.appendChild(micBtn);
   overlay.appendChild(directiveInput);
   overlay.appendChild(actions);
 

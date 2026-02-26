@@ -16,7 +16,7 @@ import {
 import { setupTileDragDrop } from "./drag-drop.js";
 import { performMerge } from "./merge.js";
 import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
-import { performAddFromVoice } from "./add-from-voice.js";
+import { performAddFromPrompt } from "./add-from-prompt.js";
 import { isBuiltInTile } from "./builtin.js";
 import { openEditView, closeEditView } from "./edit-view.js";
 import type { ShaderObject } from "./types.js";
@@ -208,45 +208,27 @@ function renderGrid(shaders: ShaderObject[]): void {
 function createAddTileButton(): HTMLElement {
   const btn = document.createElement("button");
   btn.className = "tile tile-add-new";
-  btn.setAttribute("aria-label", "Add new tile with voice");
+  btn.setAttribute("aria-label", "Add new tile");
   btn.innerHTML = '<span class="tile-add-icon">+</span><span class="tile-add-label">Add tile</span>';
-
-  let currentStop: (() => void) | null = null;
 
   btn.addEventListener("click", async () => {
     if (!storage) return;
 
-    // Tap-to-stop: if already recording/processing, stop and do not start new
-    if (currentStop) {
-      currentStop();
-      return;
-    }
+    const prompt = window.prompt("Describe your shader (e.g. blue gradient, red plasma)");
+    if (!prompt?.trim()) return;
 
     const label = btn.querySelector(".tile-add-label");
     const icon = btn.querySelector(".tile-add-icon");
+    btn.classList.add("tile-add-loading");
+    btn.disabled = true;
+    if (label) label.textContent = "Processing…";
 
-    // Recording phase: show tap-to-stop, keep clickable
-    btn.classList.add("tile-add-recording");
-    if (label) label.textContent = "Tap to stop";
-    if (icon) icon.textContent = "●";
+    const result = await performAddFromPrompt(prompt.trim(), storage);
 
-    const { promise, stop } = performAddFromVoice(storage, {
-      onRecordingEnded: () => {
-        // Processing phase: disable interaction, show processing state
-        btn.classList.add("tile-add-loading");
-        btn.disabled = true;
-        if (label) label.textContent = "Processing…";
-      },
-    });
-    currentStop = stop;
-
-    const result = await promise.finally(() => {
-      currentStop = null;
-      btn.classList.remove("tile-add-recording", "tile-add-loading");
-      btn.disabled = false;
-      if (label) label.textContent = "Add tile";
-      if (icon) icon.textContent = "+";
-    });
+    btn.classList.remove("tile-add-loading");
+    btn.disabled = false;
+    if (label) label.textContent = "Add tile";
+    if (icon) icon.textContent = "+";
 
     if (result.success && result.shader) {
       const grid = btn.parentElement;

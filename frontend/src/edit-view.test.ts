@@ -23,11 +23,6 @@ vi.mock("./suggest.js", () => ({
   }),
 }));
 
-vi.mock("./speech-recognition.js", () => ({
-  isSpeechRecognitionSupported: vi.fn(() => false),
-  startSpeechRecognition: vi.fn(() => ({ stop: vi.fn() })),
-}));
-
 const NEW_SHADER: ShaderObject = {
   id: "new-shader-id",
   name: "Add a glow",

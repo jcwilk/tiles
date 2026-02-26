@@ -495,10 +495,6 @@ body {
   height: 1.25rem;
 }
 
-.edit-mic-active {
-  animation: tile-add-recording-pulse 1.5s ease-in-out infinite;
-}
-
 @keyframes toast-enter {
   from {
     opacity: 0;

@@ -1,6 +1,6 @@
 /**
  * Shared offscreen validation context for shader compilation checks.
- * Single 1×1 WebGL2 context reused across merge, apply-directive, and add-from-voice
+ * Single 1×1 WebGL2 context reused across merge, apply-directive, and add-from-prompt
  * to avoid allocating throwaway contexts that count against browser limits.
  *
  * Per CONVENTIONS.md: [VALID CODE] / [INVALID CODE] placeholders bypass real GPU.
