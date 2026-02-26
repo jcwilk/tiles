@@ -19,6 +19,7 @@ import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
 import { performAddFromPrompt } from "./add-from-prompt.js";
 import { isBuiltInTile } from "./builtin.js";
 import { openEditView, closeEditView } from "./edit-view.js";
+import { isDeleteOrControlClick } from "./click-utils.js";
 import type { ShaderObject } from "./types.js";
 
 const appEl = document.getElementById("app");
@@ -63,7 +64,7 @@ function handleNewShaderFromEdit(newShader: ShaderObject): void {
   });
   newTile.element.classList.add("tile-merge-appear");
   newTile.element.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+    if (isDeleteOrControlClick(e)) return;
     openFullscreen(newTile);
   });
   const grid = document.querySelector(".tiles-grid");
@@ -130,7 +131,7 @@ function makeMergeHandler(currentTiles: TileElement[]) {
         });
         newTile.element.classList.add("tile-merge-appear");
         newTile.element.addEventListener("click", (e) => {
-          if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+          if (isDeleteOrControlClick(e)) return;
           openFullscreen(newTile);
         });
         observeTile(newTile);
@@ -186,7 +187,7 @@ function renderGrid(shaders: ShaderObject[]): void {
     grid.appendChild(tile.element);
 
     tile.element.addEventListener("click", (e) => {
-      if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+      if (isDeleteOrControlClick(e)) return;
       openFullscreen(tile);
     });
     return tile;
@@ -239,7 +240,7 @@ function createAddTileButton(): HTMLElement {
       });
       newTile.element.classList.add("tile-merge-appear");
       newTile.element.addEventListener("click", (e) => {
-        if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+        if (isDeleteOrControlClick(e)) return;
         openFullscreen(newTile);
       });
 

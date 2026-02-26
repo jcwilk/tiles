@@ -86,6 +86,7 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
       deleteBtn.setAttribute("aria-label", "Delete tile");
       deleteBtn.textContent = "×";
       deleteBtn.addEventListener("click", (e) => {
+        e.preventDefault();
         e.stopPropagation();
         options.onDelete?.();
       });
@@ -237,6 +238,7 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
       deleteBtn.setAttribute("aria-label", "Delete tile");
       deleteBtn.textContent = "×";
       deleteBtn.addEventListener("click", (e) => {
+        e.preventDefault();
         e.stopPropagation();
         options.onDelete?.();
       });
@@ -294,6 +296,7 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
       deleteBtn.setAttribute("aria-label", "Delete tile");
       deleteBtn.textContent = "×";
       deleteBtn.addEventListener("click", (e) => {
+        e.preventDefault();
         e.stopPropagation();
         options.onDelete?.();
       });

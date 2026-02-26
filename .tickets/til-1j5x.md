@@ -1,6 +1,6 @@
 ---
 id: til-1j5x
-status: open
+status: closed
 deps: []
 links: [til-g3qa]
 created: 2026-02-26T00:26:01Z

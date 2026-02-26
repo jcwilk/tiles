@@ -221,6 +221,7 @@ body {
   align-items: center;
   justify-content: center;
   touch-action: manipulation;
+  pointer-events: all;
 }
 
 .tile-delete:hover {
