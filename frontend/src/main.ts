@@ -47,6 +47,30 @@ async function removeTile(tile: TileElement): Promise<void> {
   });
 }
 
+function handleNewShaderFromEdit(newShader: ShaderObject): void {
+  closeEditView();
+  closeFullscreen();
+  const newTile = createTile(newShader, {
+    onDelete: () => removeTile(newTile),
+  });
+  newTile.element.classList.add("tile-merge-appear");
+  newTile.element.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+    openFullscreen(newTile);
+  });
+  const grid = document.querySelector(".tiles-grid");
+  if (grid) {
+    grid.insertBefore(newTile.element, grid.firstElementChild);
+    tiles = [newTile, ...tiles];
+    teardownDragDrop?.();
+    const allEls = Array.from(grid.querySelectorAll(".tile"));
+    teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
+      onMergeRequest: makeMergeHandler(tiles),
+    });
+  }
+  requestAnimationFrame(() => openFullscreen(newTile));
+}
+
 function makeMergeHandler(currentTiles: TileElement[]) {
   const store = storage;
   return async (sourceId: string, targetId: string) => {
@@ -262,28 +286,7 @@ function openFullscreen(tile: TileElement): void {
   editBtn.addEventListener("click", () => {
     if (!storage) return;
     openEditView(tile.shader, tiles.map((t) => t.shader), storage, {
-      onNewShader: (newShader) => {
-        closeFullscreen();
-        const newTile = createTile(newShader, {
-          onDelete: () => removeTile(newTile),
-        });
-        newTile.element.classList.add("tile-merge-appear");
-        newTile.element.addEventListener("click", (e) => {
-          if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
-          openFullscreen(newTile);
-        });
-        const grid = document.querySelector(".tiles-grid");
-        if (grid) {
-          grid.insertBefore(newTile.element, grid.firstElementChild);
-          tiles = [newTile, ...tiles];
-          teardownDragDrop?.();
-          const allEls = Array.from(grid.querySelectorAll(".tile"));
-          teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
-            onMergeRequest: makeMergeHandler(tiles),
-          });
-        }
-        openFullscreen(newTile);
-      },
+      onNewShader: handleNewShaderFromEdit,
       onMount: (el) => {
         editViewOverlay = el;
       },
@@ -351,28 +354,7 @@ async function init(): Promise<void> {
       if (tile && storage) {
         openFullscreen(tile);
         openEditView(tile.shader, tiles.map((t) => t.shader), storage, {
-          onNewShader: (newShader) => {
-            closeFullscreen();
-            const newTile = createTile(newShader, {
-              onDelete: () => removeTile(newTile),
-            });
-            newTile.element.classList.add("tile-merge-appear");
-            newTile.element.addEventListener("click", (e) => {
-              if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
-              openFullscreen(newTile);
-            });
-            const grid = document.querySelector(".tiles-grid");
-            if (grid) {
-              grid.insertBefore(newTile.element, grid.firstElementChild);
-              tiles = [newTile, ...tiles];
-              teardownDragDrop?.();
-              const allEls = Array.from(grid.querySelectorAll(".tile"));
-              teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
-                onMergeRequest: makeMergeHandler(tiles),
-              });
-            }
-            openFullscreen(newTile);
-          },
+          onNewShader: handleNewShaderFromEdit,
           onMount: (el) => {
             editViewOverlay = el;
           },

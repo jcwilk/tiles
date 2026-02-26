@@ -35,6 +35,10 @@ test.describe("edit flow", () => {
 
     const gridTiles = page.locator(".tiles-grid .tile:not(.tile-add-new)");
     await expect(gridTiles).toHaveCount(7, { timeout: 10_000 });
+
+    // New tile should appear fullscreen after applying directive
+    const fullscreen = page.locator(".fullscreen");
+    await expect(fullscreen).toBeVisible({ timeout: 5_000 });
   });
 
   test("fullscreen Edit button opens edit view with suggestion cards", async ({ page }) => {

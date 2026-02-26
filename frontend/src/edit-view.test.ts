@@ -198,4 +198,26 @@ describe("edit-view", () => {
     expect(onNewShader).toHaveBeenCalledWith(NEW_SHADER);
     expect(document.querySelector(".edit-view")).toBeFalsy();
   });
+
+  it("edit view is closed before onNewShader callback runs (enables fullscreen transition)", async () => {
+    const callOrder: string[] = [];
+    const onNewShader = (shader: ShaderObject) => {
+      const editStillVisible = !!document.querySelector(".edit-view");
+      callOrder.push(editStillVisible ? "onNewShader-edit-visible" : "onNewShader-edit-closed");
+      expect(editStillVisible).toBe(false);
+      expect(shader).toEqual(NEW_SHADER);
+    };
+    openEditView(MOCK_SHADER, [MOCK_SHADER], storage, { onNewShader });
+
+    await new Promise((r) => setTimeout(r, 0));
+
+    const conservativeCard = Array.from(
+      document.querySelectorAll(".edit-suggestion")
+    ).find((c) => (c as HTMLElement).dataset.tier === "conservative") as HTMLElement;
+    conservativeCard.click();
+
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(callOrder).toEqual(["onNewShader-edit-closed"]);
+  });
 });
