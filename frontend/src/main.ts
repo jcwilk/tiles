@@ -7,6 +7,12 @@ import { createIndexedDBStorage, type ShaderStorage } from "./storage.js";
 import { seedIfEmpty } from "./seed.js";
 import { createTile, createLoadingTile, disposeTile, type TileElement } from "./tile.js";
 import { markStale } from "./context-tracker.js";
+import {
+  observeTile,
+  unobserveTile,
+  disconnectViewportObserver,
+  reconnectViewportObserver,
+} from "./viewport-observer.js";
 import { setupTileDragDrop } from "./drag-drop.js";
 import { performMerge } from "./merge.js";
 import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
@@ -35,6 +41,7 @@ async function removeTile(tile: TileElement): Promise<void> {
   const grid = tile.element.parentElement;
   if (!grid) return;
 
+  unobserveTile(tile);
   disposeTile(tile);
   tile.element.remove();
 
@@ -63,6 +70,7 @@ function handleNewShaderFromEdit(newShader: ShaderObject): void {
   if (grid) {
     grid.insertBefore(newTile.element, grid.firstElementChild);
     tiles = [newTile, ...tiles];
+    observeTile(newTile);
     teardownDragDrop?.();
     const allEls = Array.from(grid.querySelectorAll(".tile"));
     teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
@@ -125,6 +133,7 @@ function makeMergeHandler(currentTiles: TileElement[]) {
           if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
           openFullscreen(newTile);
         });
+        observeTile(newTile);
 
         const targetIdx = currentTiles.findIndex((t) => t.shader.id === targetId);
 
@@ -167,6 +176,7 @@ function makeMergeHandler(currentTiles: TileElement[]) {
 
 function renderGrid(shaders: ShaderObject[]): void {
   teardownDragDrop?.();
+  disconnectViewportObserver();
 
   const grid = document.createElement("div");
   grid.className = "tiles-grid";
@@ -187,6 +197,8 @@ function renderGrid(shaders: ShaderObject[]): void {
 
   app.innerHTML = "";
   app.appendChild(grid);
+
+  reconnectViewportObserver(tiles);
 
   teardownDragDrop = setupTileDragDrop(tiles.map((t) => t.element), {
     onMergeRequest: makeMergeHandler(tiles),
@@ -251,6 +263,7 @@ function createAddTileButton(): HTMLElement {
 
       grid.insertBefore(newTile.element, grid.firstElementChild);
       tiles = [newTile, ...tiles];
+      observeTile(newTile);
 
       teardownDragDrop?.();
       const allEls = Array.from(grid.querySelectorAll(".tile"));
@@ -266,6 +279,7 @@ function createAddTileButton(): HTMLElement {
 function openFullscreen(tile: TileElement): void {
   if (fullscreenOverlay) return;
 
+  disconnectViewportObserver();
   const gridCanvases = tiles
     .map((t) => t.canvasRef.current)
     .filter((c): c is HTMLCanvasElement => c !== null);
@@ -321,6 +335,7 @@ function closeFullscreen(): void {
   fullscreenOverlay = null;
   fullscreenTile = null;
 
+  reconnectViewportObserver(tiles);
   for (const t of tiles) {
     t.recreateEngineIfNeeded?.();
   }
