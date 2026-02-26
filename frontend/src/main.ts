@@ -6,6 +6,7 @@ import "./styles.css";
 import { createIndexedDBStorage, type ShaderStorage } from "./storage.js";
 import { seedIfEmpty } from "./seed.js";
 import { createTile, createLoadingTile, disposeTile, type TileElement } from "./tile.js";
+import { markStale } from "./context-tracker.js";
 import { setupTileDragDrop } from "./drag-drop.js";
 import { performMerge } from "./merge.js";
 import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
@@ -265,6 +266,11 @@ function createAddTileButton(): HTMLElement {
 function openFullscreen(tile: TileElement): void {
   if (fullscreenOverlay) return;
 
+  const gridCanvases = tiles
+    .map((t) => t.canvasRef.current)
+    .filter((c): c is HTMLCanvasElement => c !== null);
+  markStale(gridCanvases);
+
   const overlay = document.createElement("div");
   overlay.className = "fullscreen";
 
@@ -314,6 +320,10 @@ function closeFullscreen(): void {
   fullscreenOverlay.remove();
   fullscreenOverlay = null;
   fullscreenTile = null;
+
+  for (const t of tiles) {
+    t.recreateEngineIfNeeded?.();
+  }
 
   history.replaceState({}, "", window.location.pathname + window.location.search);
 }

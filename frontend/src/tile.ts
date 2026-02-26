@@ -4,6 +4,7 @@
  */
 import type { ShaderObject } from "./types.js";
 import { createShaderEngine, type ShaderEngine } from "./shader-engine.js";
+import { makeRoom, register, unregister } from "./context-tracker.js";
 import { showToast } from "./toast.js";
 
 /** Defer snapshot capture; requestIdleCallback when available, else setTimeout. */
@@ -20,6 +21,10 @@ export interface TileElement {
   shader: ShaderObject;
   engine: ShaderEngine | null;
   animationId: number | null;
+  /** Canvas ref for context tracker unregister (may change on context-loss recovery). */
+  canvasRef: { current: HTMLCanvasElement | null };
+  /** Recreate engine if evicted. Call when closing fullscreen to restore grid tiles. */
+  recreateEngineIfNeeded?: () => void;
 }
 
 export interface CreateTileOptions {
@@ -66,6 +71,7 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
   const loseContextExtRef = { current: null as ReturnType<ShaderEngine["getLoseContextExtension"]> };
   const canvasRef = { current: canvas };
 
+  makeRoom();
   const result = createShaderEngine({
     canvas,
     vertexSource: shader.vertexSource,
@@ -135,6 +141,15 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
 
     if (newResult.success && newResult.engine) {
       delete (tile as unknown as { _placeholder?: HTMLElement })._placeholder;
+      makeRoom();
+      const onEvict = () => {
+        engineRef.current = null;
+        if (animationIdRef.current !== null) {
+          cancelAnimationFrame(animationIdRef.current);
+          animationIdRef.current = null;
+        }
+      };
+      register(newCanvas, newResult.engine, onEvict);
       engineRef.current = newResult.engine;
       loseContextExtRef.current = newResult.engine.getLoseContextExtension();
       engine = newResult.engine;
@@ -186,6 +201,14 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
 
   if (result.success && result.engine) {
     engine = result.engine;
+    const onEvict = () => {
+      engineRef.current = null;
+      if (animationIdRef.current !== null) {
+        cancelAnimationFrame(animationIdRef.current);
+        animationIdRef.current = null;
+      }
+    };
+    register(canvas, result.engine, onEvict);
     tile.appendChild(canvas);
     tile.appendChild(label);
 
@@ -259,17 +282,75 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
     }
   }
 
+  const recreateEngineIfNeeded = (): void => {
+    if (engineRef.current || !canvasRef.current) return;
+    const c = canvasRef.current;
+    if (!c.isConnected) return;
+    makeRoom();
+    const newResult = createShaderEngine({
+      canvas: c,
+      vertexSource: shader.vertexSource,
+      fragmentSource: shader.fragmentSource,
+      onContextLost: () => {
+        if (!engineRef.current) return;
+        loseContextExtRef.current = engineRef.current.getLoseContextExtension();
+        engineRef.current = null;
+        if (animationIdRef.current !== null) {
+          cancelAnimationFrame(animationIdRef.current);
+          animationIdRef.current = null;
+        }
+        const newPlaceholder = createPlaceholder(snapshot);
+        newPlaceholder.addEventListener("click", handleRecoverClick);
+        c.replaceWith(newPlaceholder);
+        (tile as unknown as { _placeholder?: HTMLElement })._placeholder = newPlaceholder;
+      },
+    });
+    if (!newResult.success || !newResult.engine) return;
+    const onEvict = () => {
+      engineRef.current = null;
+      if (animationIdRef.current !== null) {
+        cancelAnimationFrame(animationIdRef.current);
+        animationIdRef.current = null;
+      }
+    };
+    register(c, newResult.engine, onEvict);
+    engineRef.current = newResult.engine;
+    loseContextExtRef.current = newResult.engine.getLoseContextExtension();
+    const loop = () => {
+      if (engineRef.current) {
+        engineRef.current.render();
+        if (!snapshotScheduled) {
+          snapshotScheduled = true;
+          deferSnapshot(() => {
+            try {
+              snapshot = c.toDataURL();
+            } catch {
+              /* cross-origin or other */
+            }
+          });
+        }
+        animationIdRef.current = requestAnimationFrame(loop);
+      }
+    };
+    animationIdRef.current = requestAnimationFrame(loop);
+  };
+
   return {
     element: tile,
     shader,
     engine,
     animationId,
+    canvasRef,
+    recreateEngineIfNeeded,
   };
 }
 
 export function disposeTile(tile: TileElement): void {
   if (tile.animationId !== null) {
     cancelAnimationFrame(tile.animationId);
+  }
+  if (tile.canvasRef.current) {
+    unregister(tile.canvasRef.current);
   }
   tile.engine?.dispose();
 }
