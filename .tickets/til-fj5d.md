@@ -30,7 +30,7 @@ Create a new document at `docs/cursor-sub-agents.md` (or similar) summarizing fi
 - Notes on Cursor Cloud computer control capabilities and model recommendations (Opus, etc.)
 
 ## Sources to check:
-- Cursor official docs
+- Cursor official docs — especially https://cursor.com/docs/context/subagents#configuration-fields
 - .cursor/ directory conventions
 - Community resources, forums, changelogs
 - Any existing .cursor/ configuration in this repo
