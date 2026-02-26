@@ -421,7 +421,7 @@ describe("worker", () => {
         expect.objectContaining({
           messages: expect.any(Array),
           max_tokens: 128,
-          temperature: 0.7,
+          temperature: 0.2,
         })
       );
     });
@@ -435,9 +435,9 @@ describe("worker", () => {
         "CF-Connecting-IP": "1.2.3.4",
       };
       for (const [tier, temp] of [
-        ["conservative", 0.3],
-        ["moderate", 0.7],
-        ["wild", 1.2],
+        ["conservative", 0.1],
+        ["moderate", 0.2],
+        ["wild", 0.3],
       ] as const) {
         const req = new Request("http://localhost/suggest", {
           method: "POST",

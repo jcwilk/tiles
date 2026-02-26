@@ -230,9 +230,9 @@ Use: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in v
 }
 
 const ADVENTUROUSNESS_TEMPERATURE: Record<string, number> = {
-  conservative: 0.3,
-  moderate: 0.7,
-  wild: 1.2,
+  conservative: 0.1,
+  moderate: 0.2,
+  wild: 0.3,
 };
 
 interface SuggestBody {
@@ -288,7 +288,7 @@ async function handleSuggest(
     );
   }
 
-  const temperature = ADVENTUROUSNESS_TEMPERATURE[adventurousness] ?? 0.7;
+  const temperature = ADVENTUROUSNESS_TEMPERATURE[adventurousness] ?? 0.2;
 
   try {
     const response = await env.AI.run(TEXT_MODEL, {
