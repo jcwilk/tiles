@@ -1,9 +1,9 @@
 /**
  * Viewport-aware context allocation via IntersectionObserver.
- * Drives markVisible/markStale for context tracker so off-screen tiles
+ * Drives markVisible/markOffscreen for WebGLContextPool so off-screen tiles
  * are evicted first.
  */
-import { markVisible, markStale } from "./context-tracker.js";
+import { getDefaultPool } from "./webgl-context-pool.js";
 import type { TileElement } from "./tile.js";
 
 let observer: IntersectionObserver | null = null;
@@ -13,10 +13,11 @@ let pendingStale: Set<TileElement> = new Set();
 let pendingScheduled = false;
 
 function flushPending(): void {
+  const pool = getDefaultPool();
   if (pendingVisible.size > 0) {
     for (const tile of pendingVisible) {
       const canvas = tile.canvasRef.current;
-      if (canvas) markVisible(canvas);
+      if (canvas) pool.markVisible(canvas);
       tile.recreateEngineIfNeeded?.();
     }
     pendingVisible.clear();
@@ -27,7 +28,7 @@ function flushPending(): void {
       const canvas = tile.canvasRef.current;
       if (canvas) canvases.push(canvas);
     }
-    if (canvases.length > 0) markStale(canvases);
+    if (canvases.length > 0) pool.markOffscreenMany(canvases);
     pendingStale.clear();
   }
   pendingScheduled = false;

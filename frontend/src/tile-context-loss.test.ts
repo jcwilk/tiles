@@ -44,6 +44,17 @@ vi.mock("./toast.js", () => ({
   showToast: vi.fn(),
 }));
 
+vi.mock("./webgl-context-pool.js", () => ({
+  getDefaultPool: () => ({
+    acquire: () => ({}),
+    release: () => {},
+    markVisible: () => {},
+    markOffscreen: () => {},
+    markOffscreenMany: () => {},
+    markFullscreen: () => {},
+  }),
+}));
+
 describe("tile context loss", () => {
   beforeEach(() => {
     vi.clearAllMocks();

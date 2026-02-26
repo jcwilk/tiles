@@ -4,7 +4,7 @@
  */
 import type { ShaderObject } from "./types.js";
 import { createShaderEngine, type ShaderEngine } from "./shader-engine.js";
-import { makeRoom, register, unregister } from "./context-tracker.js";
+import { getDefaultPool } from "./webgl-context-pool.js";
 import { showToast } from "./toast.js";
 
 /** Defer snapshot capture; requestIdleCallback when available, else setTimeout. */
@@ -71,9 +71,39 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
   const loseContextExtRef = { current: null as ReturnType<ShaderEngine["getLoseContextExtension"]> };
   const canvasRef = { current: canvas };
 
-  makeRoom();
+  const pool = getDefaultPool();
+  const needsPool = shader.fragmentSource !== "[VALID CODE]";
+  const gl = needsPool ? pool.acquire(canvas) : null;
+  if (needsPool && !gl) {
+    const err = document.createElement("div");
+    err.className = "tile-error";
+    err.textContent = "Too many active shaders — close some tiles";
+    tile.appendChild(err);
+
+    if (options?.onDelete) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "tile-delete";
+      deleteBtn.setAttribute("aria-label", "Delete tile");
+      deleteBtn.textContent = "×";
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        options.onDelete?.();
+      });
+      tile.appendChild(deleteBtn);
+    }
+    return {
+      element: tile,
+      shader,
+      engine: null,
+      animationId: null,
+      canvasRef,
+      recreateEngineIfNeeded: undefined,
+    };
+  }
+
   const result = createShaderEngine({
     canvas,
+    gl: gl ?? undefined,
     vertexSource: shader.vertexSource,
     fragmentSource: shader.fragmentSource,
     onContextLost: () => {
@@ -120,8 +150,14 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
 
   function attemptRecreate(placeholder: HTMLElement, existingCanvas?: HTMLCanvasElement): void {
     const newCanvas = existingCanvas ?? document.createElement("canvas");
+    const newGl = pool.acquire(newCanvas);
+    if (!newGl) {
+      showToast("Too many active shaders — close some tiles");
+      return;
+    }
     const newResult = createShaderEngine({
       canvas: newCanvas,
+      gl: newGl,
       vertexSource: shader.vertexSource,
       fragmentSource: shader.fragmentSource,
       onContextLost: () => {
@@ -141,15 +177,6 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
 
     if (newResult.success && newResult.engine) {
       delete (tile as unknown as { _placeholder?: HTMLElement })._placeholder;
-      makeRoom();
-      const onEvict = () => {
-        engineRef.current = null;
-        if (animationIdRef.current !== null) {
-          cancelAnimationFrame(animationIdRef.current);
-          animationIdRef.current = null;
-        }
-      };
-      register(newCanvas, newResult.engine, onEvict);
       engineRef.current = newResult.engine;
       loseContextExtRef.current = newResult.engine.getLoseContextExtension();
       engine = newResult.engine;
@@ -201,14 +228,6 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
 
   if (result.success && result.engine) {
     engine = result.engine;
-    const onEvict = () => {
-      engineRef.current = null;
-      if (animationIdRef.current !== null) {
-        cancelAnimationFrame(animationIdRef.current);
-        animationIdRef.current = null;
-      }
-    };
-    register(canvas, result.engine, onEvict);
     tile.appendChild(canvas);
     tile.appendChild(label);
 
@@ -286,9 +305,11 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
     if (engineRef.current || !canvasRef.current) return;
     const c = canvasRef.current;
     if (!c.isConnected) return;
-    makeRoom();
+    const newGl = pool.acquire(c);
+    if (!newGl) return;
     const newResult = createShaderEngine({
       canvas: c,
+      gl: newGl,
       vertexSource: shader.vertexSource,
       fragmentSource: shader.fragmentSource,
       onContextLost: () => {
@@ -306,14 +327,6 @@ export function createTile(shader: ShaderObject, options?: CreateTileOptions): T
       },
     });
     if (!newResult.success || !newResult.engine) return;
-    const onEvict = () => {
-      engineRef.current = null;
-      if (animationIdRef.current !== null) {
-        cancelAnimationFrame(animationIdRef.current);
-        animationIdRef.current = null;
-      }
-    };
-    register(c, newResult.engine, onEvict);
     engineRef.current = newResult.engine;
     loseContextExtRef.current = newResult.engine.getLoseContextExtension();
     const loop = () => {
@@ -350,7 +363,7 @@ export function disposeTile(tile: TileElement): void {
     cancelAnimationFrame(tile.animationId);
   }
   if (tile.canvasRef.current) {
-    unregister(tile.canvasRef.current);
+    getDefaultPool().release(tile.canvasRef.current);
   }
   tile.engine?.dispose();
 }

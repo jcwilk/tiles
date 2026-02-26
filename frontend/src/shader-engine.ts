@@ -13,6 +13,8 @@ const VALID_PLACEHOLDER = "[VALID CODE]";
 const INVALID_PLACEHOLDER = "[INVALID CODE]";
 export interface ShaderEngineConfig {
   canvas: HTMLCanvasElement;
+  /** Optional: use this context instead of canvas.getContext (e.g. from WebGLContextPool). */
+  gl?: WebGL2RenderingContext;
   vertexSource?: string;
   fragmentSource: string;
   width?: number;
@@ -193,6 +195,7 @@ export function getShaderCompilationErrors(
 export function createShaderEngine(config: ShaderEngineConfig): ShaderEngineResult & { engine?: ShaderEngine } {
   const {
     canvas,
+    gl: providedGl,
     vertexSource = DEFAULT_VERTEX,
     fragmentSource,
     width = canvas.width || 256,
@@ -211,11 +214,13 @@ export function createShaderEngine(config: ShaderEngineConfig): ShaderEngineResu
     return { success: true, engine };
   }
 
-  const gl = canvas.getContext("webgl2", {
-    alpha: false,
-    antialias: false,
-    powerPreference: "low-power",
-  });
+  const gl =
+    providedGl ??
+    canvas.getContext("webgl2", {
+      alpha: false,
+      antialias: false,
+      powerPreference: "low-power",
+    });
 
   if (!gl) {
     return {

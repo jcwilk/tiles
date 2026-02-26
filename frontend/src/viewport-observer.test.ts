@@ -10,7 +10,7 @@ import {
   reconnectViewportObserver,
 } from "./viewport-observer.js";
 import { createTile } from "./tile.js";
-import { resetContextTracker } from "./context-tracker.js";
+import { resetDefaultPool } from "./webgl-context-pool.js";
 import type { ShaderObject } from "./types.js";
 
 const PLACEHOLDER_SHADER: ShaderObject = {
@@ -23,7 +23,7 @@ const PLACEHOLDER_SHADER: ShaderObject = {
 
 describe("viewport-observer", () => {
   beforeEach(() => {
-    resetContextTracker();
+    resetDefaultPool();
     vi.stubGlobal("requestIdleCallback", vi.fn((fn: () => void) => setTimeout(fn, 0)));
     vi.stubGlobal(
       "IntersectionObserver",
@@ -37,7 +37,7 @@ describe("viewport-observer", () => {
 
   afterEach(() => {
     disconnectViewportObserver();
-    resetContextTracker();
+    resetDefaultPool();
     vi.unstubAllGlobals();
   });
 

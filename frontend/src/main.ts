@@ -6,7 +6,7 @@ import "./styles.css";
 import { createIndexedDBStorage, type ShaderStorage } from "./storage.js";
 import { seedIfEmpty } from "./seed.js";
 import { createTile, createLoadingTile, disposeTile, type TileElement } from "./tile.js";
-import { markStale } from "./context-tracker.js";
+import { getDefaultPool } from "./webgl-context-pool.js";
 import {
   observeTile,
   unobserveTile,
@@ -283,7 +283,7 @@ function openFullscreen(tile: TileElement): void {
   const gridCanvases = tiles
     .map((t) => t.canvasRef.current)
     .filter((c): c is HTMLCanvasElement => c !== null);
-  markStale(gridCanvases);
+  getDefaultPool().markOffscreenMany(gridCanvases);
 
   const overlay = document.createElement("div");
   overlay.className = "fullscreen";
@@ -291,6 +291,9 @@ function openFullscreen(tile: TileElement): void {
   const fullscreenTileEl = createTile(tile.shader);
   fullscreenTileEl.element.classList.add("tile");
   fullscreenTileEl.element.addEventListener("click", (e) => e.stopPropagation());
+  if (fullscreenTileEl.canvasRef.current) {
+    getDefaultPool().markFullscreen(fullscreenTileEl.canvasRef.current);
+  }
 
   const closeBtn = document.createElement("button");
   closeBtn.className = "fullscreen-close";
