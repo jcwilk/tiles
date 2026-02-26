@@ -73,6 +73,15 @@ describe("createShaderEngine", () => {
     });
     expect(result.engine!.getLastError()).toBeNull();
   });
+
+  it("engine.getLoseContextExtension returns null for placeholder engine", () => {
+    const canvas = document.createElement("canvas");
+    const result = createShaderEngine({
+      canvas,
+      fragmentSource: "[VALID CODE]",
+    });
+    expect(result.engine!.getLoseContextExtension()).toBeNull();
+  });
 });
 
 describe("getShaderCompilationErrors", () => {

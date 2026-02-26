@@ -1,6 +1,6 @@
 ---
 id: til-cspg
-status: open
+status: closed
 deps: []
 links: [til-lcau]
 created: 2026-02-26T00:25:32Z
