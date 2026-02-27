@@ -9,6 +9,7 @@ This directory contains domain-specific knowledge and topic-specific deep dives.
 - [Prompt Evaluation Tooling — Research Decision](prompt-eval-decision.md)
 - *(Future Link)*: AI Prompts and LLM Code Generation Strategy.
 - [Rate Limiting & Cloudflare Security Constraints](rate-limiting.md) — Rate limits, KV config, alerts, and cost monitoring (`./rl cost`).
+- [Cursor Sub-Agents](cursor-sub-agents.md) — Research summary: configuration format, capabilities, and Tiles-specific recommendations.
 
 ---
 

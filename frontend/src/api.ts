@@ -1,7 +1,7 @@
 /**
  * API client for the Tiles worker.
  * Calls /generate to request AI-merged GLSL from two fragment shaders.
- * Calls /transcribe for voice-to-text and /generate-from-prompt for new tiles.
+ * Calls /generate-from-prompt for new tiles.
  */
 import { getApiUrl } from "./env.js";
 
@@ -10,37 +10,10 @@ export interface GenerateResponse {
   tokensUsed?: number;
 }
 
-export interface TranscribeResponse {
-  text: string;
-}
-
 export interface GenerateError {
   error: string;
   details?: string;
   retryAfter?: number;
-}
-
-export async function transcribeAudio(audioBase64: string): Promise<TranscribeResponse> {
-  const url = `${getApiUrl()}/transcribe`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ audioBase64 }),
-  });
-
-  const data = (await res.json()) as TranscribeResponse | GenerateError;
-
-  if (!res.ok) {
-    const err = data as GenerateError;
-    throw new Error(err.details ?? err.error ?? `Request failed: ${res.status}`);
-  }
-
-  const ok = data as TranscribeResponse;
-  if (typeof ok.text !== "string") {
-    throw new Error("Invalid response: missing text");
-  }
-
-  return ok;
 }
 
 export async function generateFromPrompt(

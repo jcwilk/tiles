@@ -13,16 +13,28 @@ const VALID_PLACEHOLDER = "[VALID CODE]";
 const INVALID_PLACEHOLDER = "[INVALID CODE]";
 export interface ShaderEngineConfig {
   canvas: HTMLCanvasElement;
+  /** Optional: use this context instead of canvas.getContext (e.g. from WebGLContextPool). */
+  gl?: WebGL2RenderingContext;
   vertexSource?: string;
   fragmentSource: string;
   width?: number;
   height?: number;
+  /** Called when WebGL context is lost. Call e.preventDefault() so browser allows restoration. */
+  onContextLost?: () => void;
+  /** Called when WebGL context is restored (e.g. after restoreContext()). */
+  onContextRestored?: () => void;
 }
 
 export interface ShaderEngineResult {
   success: boolean;
   compileError?: string;
   linkError?: string;
+}
+
+/** WEBGL_lose_context extension for simulating/restoring context loss. */
+export interface WEBGLLoseContext {
+  loseContext(): void;
+  restoreContext(): void;
 }
 
 export interface ShaderEngine {
@@ -36,6 +48,8 @@ export interface ShaderEngine {
   getLastError(): string | null;
   /** Dispose of WebGL resources. */
   dispose(): void;
+  /** Get WEBGL_lose_context extension for restoreContext(), or null. */
+  getLoseContextExtension(): WEBGLLoseContext | null;
 }
 
 const DEFAULT_VERTEX = `#version 300 es
@@ -124,6 +138,9 @@ function createNoopEngine(canvas: HTMLCanvasElement, _width: number, _height: nu
       return null;
     },
     dispose() {},
+    getLoseContextExtension() {
+      return null;
+    },
   };
 }
 
@@ -178,10 +195,13 @@ export function getShaderCompilationErrors(
 export function createShaderEngine(config: ShaderEngineConfig): ShaderEngineResult & { engine?: ShaderEngine } {
   const {
     canvas,
+    gl: providedGl,
     vertexSource = DEFAULT_VERTEX,
     fragmentSource,
     width = canvas.width || 256,
     height = canvas.height || 256,
+    onContextLost,
+    onContextRestored,
   } = config;
 
   // Placeholder bypass for tests (CONVENTIONS.md)
@@ -194,11 +214,13 @@ export function createShaderEngine(config: ShaderEngineConfig): ShaderEngineResu
     return { success: true, engine };
   }
 
-  const gl = canvas.getContext("webgl2", {
-    alpha: false,
-    antialias: false,
-    powerPreference: "low-power",
-  });
+  const gl =
+    providedGl ??
+    canvas.getContext("webgl2", {
+      alpha: false,
+      antialias: false,
+      powerPreference: "low-power",
+    });
 
   if (!gl) {
     return {
@@ -206,6 +228,24 @@ export function createShaderEngine(config: ShaderEngineConfig): ShaderEngineResu
       compileError: "WebGL2 not supported",
     };
   }
+
+  const loseContextExt = gl.getExtension("WEBGL_lose_context") as WEBGLLoseContext | null;
+
+  canvas.addEventListener(
+    "webglcontextlost",
+    (e: Event) => {
+      e.preventDefault();
+      onContextLost?.();
+    },
+    false
+  );
+  canvas.addEventListener(
+    "webglcontextrestored",
+    () => {
+      onContextRestored?.();
+    },
+    false
+  );
 
   const vertShader = createShader(gl, gl.VERTEX_SHADER, vertexSource);
   const fragShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
@@ -357,6 +397,10 @@ export function createShaderEngine(config: ShaderEngineConfig): ShaderEngineResu
 
     getLastError() {
       return lastError;
+    },
+
+    getLoseContextExtension() {
+      return loseContextExt;
     },
 
     dispose() {

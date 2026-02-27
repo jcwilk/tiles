@@ -15,7 +15,6 @@ vi.mock("mimetext", () => ({
   }),
 }));
 
-import models from "../models.json";
 import worker, { sanitizeGLSL, getLimits } from "./index.js";
 import type { Env } from "./index.js";
 
@@ -38,15 +37,12 @@ function createMockKV(initial?: Map<string, string>): KVNamespace & { store: Map
 
 function createMockAI(response: string, tokens = 100): Ai {
   return {
-    run: vi.fn((model: string) => {
-      if (model === models.whisper.id) {
-        return Promise.resolve({ text: "transcribed shader description" });
-      }
-      return Promise.resolve({
+    run: vi.fn(() =>
+      Promise.resolve({
         response,
         usage: { prompt_tokens: 50, completion_tokens: tokens, total_tokens: 50 + tokens },
-      });
-    }),
+      })
+    ),
   } as unknown as Ai;
 }
 
@@ -275,49 +271,6 @@ describe("worker", () => {
     });
   });
 
-  describe("POST /transcribe", () => {
-    it("rejects request without allowed origin", async () => {
-      const env = createEnv();
-      const req = new Request("http://localhost/transcribe", {
-        method: "POST",
-        headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
-        body: JSON.stringify({ audioBase64: btoa("fake-audio") }),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(403);
-    });
-
-    it("rejects missing or invalid audioBase64", async () => {
-      const env = createEnv();
-      const req = new Request("http://localhost/transcribe", {
-        method: "POST",
-        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toContain("audioBase64");
-    });
-
-    it("returns transcription for valid audio", async () => {
-      const env = createEnv();
-      const req = new Request("http://localhost/transcribe", {
-        method: "POST",
-        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
-        body: JSON.stringify({ audioBase64: btoa("fake-audio-bytes") }),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { text: string };
-      expect(body.text).toBe("transcribed shader description");
-      expect(env.AI.run).toHaveBeenCalledWith(
-        models.whisper.id,
-        expect.objectContaining({ audio: expect.any(Array) })
-      );
-    });
-  });
-
   describe("POST /generate-from-prompt", () => {
     it("rejects request without allowed origin", async () => {
       const env = createEnv();
@@ -468,7 +421,7 @@ describe("worker", () => {
         expect.objectContaining({
           messages: expect.any(Array),
           max_tokens: 128,
-          temperature: 0.7,
+          temperature: 0.2,
         })
       );
     });
@@ -482,9 +435,9 @@ describe("worker", () => {
         "CF-Connecting-IP": "1.2.3.4",
       };
       for (const [tier, temp] of [
-        ["conservative", 0.3],
-        ["moderate", 0.7],
-        ["wild", 1.2],
+        ["conservative", 0.1],
+        ["moderate", 0.2],
+        ["wild", 0.3],
       ] as const) {
         const req = new Request("http://localhost/suggest", {
           method: "POST",

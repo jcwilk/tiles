@@ -7,7 +7,6 @@ import type { AiModels } from "@cloudflare/workers-types";
 import models from "../models.json";
 
 const TEXT_MODEL = models.text.id as keyof AiModels;
-const WHISPER_MODEL = models.whisper.id as keyof AiModels;
 
 /** Allowed origins: GitHub Pages (*.github.io) and localhost for dev */
 const ALLOWED_ORIGIN_PATTERNS = [
@@ -83,10 +82,6 @@ export default {
       return handleGenerate(request, env, corsHeaders);
     }
 
-    if (url.pathname === "/transcribe" && request.method === "POST") {
-      return handleTranscribe(request, env, corsHeaders);
-    }
-
     if (url.pathname === "/generate-from-prompt" && request.method === "POST") {
       return handleGenerateFromPrompt(request, env, corsHeaders);
     }
@@ -115,66 +110,6 @@ function getCorsHeaders(origin: string, env: Env): Record<string, string> {
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
-}
-
-interface TranscribeBody {
-  /** Base64-encoded audio (WAV, MP3, WebM, etc.) */
-  audioBase64: string;
-}
-
-async function handleTranscribe(
-  request: Request,
-  env: Env,
-  corsHeaders: Record<string, string>
-): Promise<Response> {
-  const origin = request.headers.get("Origin") ?? "";
-  if (!isOriginAllowed(origin, env)) {
-    return jsonResponse({ error: "Forbidden: origin not allowed" }, 403, corsHeaders);
-  }
-
-  let body: TranscribeBody;
-  try {
-    body = (await request.json()) as TranscribeBody;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
-  }
-
-  const { audioBase64 } = body;
-  if (typeof audioBase64 !== "string" || !audioBase64) {
-    return jsonResponse({ error: "Missing or invalid audioBase64" }, 400, corsHeaders);
-  }
-
-  let audioBytes: number[];
-  try {
-    const binary = atob(audioBase64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    audioBytes = [...bytes];
-  } catch {
-    return jsonResponse({ error: "Invalid base64 audio data" }, 400, corsHeaders);
-  }
-
-  if (audioBytes.length === 0) {
-    return jsonResponse({ error: "Audio data is empty" }, 400, corsHeaders);
-  }
-
-  try {
-    const response = (await env.AI.run(WHISPER_MODEL, { audio: audioBytes })) as { text?: string };
-    const text = typeof response.text === "string" ? response.text.trim() : "";
-    return jsonResponse({ text }, 200, corsHeaders);
-  } catch (err) {
-    console.error("Whisper transcription error:", err);
-    return jsonResponse(
-      {
-        error: "Transcription failed",
-        details: err instanceof Error ? err.message : "Unknown error",
-      },
-      502,
-      corsHeaders
-    );
-  }
 }
 
 interface GenerateFromPromptBody {
@@ -295,9 +230,9 @@ Use: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in v
 }
 
 const ADVENTUROUSNESS_TEMPERATURE: Record<string, number> = {
-  conservative: 0.3,
-  moderate: 0.7,
-  wild: 1.2,
+  conservative: 0.1,
+  moderate: 0.2,
+  wild: 0.3,
 };
 
 interface SuggestBody {
@@ -353,7 +288,7 @@ async function handleSuggest(
     );
   }
 
-  const temperature = ADVENTUROUSNESS_TEMPERATURE[adventurousness] ?? 0.7;
+  const temperature = ADVENTUROUSNESS_TEMPERATURE[adventurousness] ?? 0.2;
 
   try {
     const response = await env.AI.run(TEXT_MODEL, {

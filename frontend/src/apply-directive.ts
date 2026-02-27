@@ -3,7 +3,7 @@
  * Same 3-attempt pattern as merge.ts.
  */
 import { applyDirective } from "./api.js";
-import { createShaderEngine } from "./shader-engine.js";
+import { compileCheck } from "./validation-context.js";
 import { showToast } from "./toast.js";
 import type { ShaderObject } from "./types.js";
 import type { ShaderStorage } from "./storage.js";
@@ -25,13 +25,6 @@ void main() {
   gl_Position = vec4(a_position, 0.0, 1.0);
 }
 `;
-
-function createTempCanvas(): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  return canvas;
-}
 
 export interface ApplyDirectiveResult {
   success: boolean;
@@ -59,14 +52,9 @@ export async function performApplyDirective(
       );
       const newFragmentSource = stripMarkdownFences(raw);
 
-      const canvas = createTempCanvas();
-      const result = createShaderEngine({
-        canvas,
-        vertexSource: DEFAULT_VERTEX,
-        fragmentSource: newFragmentSource,
-      });
+      const result = compileCheck(newFragmentSource, DEFAULT_VERTEX);
 
-      if (result.success) {
+      if (result.ok) {
         const name = directive.slice(0, 50) + (directive.length > 50 ? "…" : "");
         const newShader: ShaderObject = {
           id: crypto.randomUUID(),

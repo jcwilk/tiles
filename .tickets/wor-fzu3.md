@@ -1,6 +1,6 @@
 ---
 id: wor-fzu3
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-26T19:45:21Z
