@@ -54,7 +54,7 @@ describe("TileGrid", () => {
 
     const grid = screen.getByTestId("tile-grid");
     expect(grid).toBeInTheDocument();
-    expect(grid).toHaveClass("tiles-grid");
+    expect(grid.tagName.toLowerCase()).toBe("div");
   });
 
   it("maps shaders to Tile components", () => {
@@ -84,7 +84,7 @@ describe("TileGrid", () => {
 
     const addBtn = screen.getByRole("button", { name: "Add new tile" });
     expect(addBtn).toBeInTheDocument();
-    expect(addBtn).toHaveClass("tile-add-new");
+    expect(screen.getByTestId("add-tile-button")).toBe(addBtn);
   });
 
   it("sorts shaders newest first", () => {
@@ -98,7 +98,7 @@ describe("TileGrid", () => {
       />
     );
 
-    const tiles = container.querySelectorAll(".tile:not(.tile-add-new)");
+    const tiles = container.querySelectorAll("[data-shader-id]");
     expect(tiles).toHaveLength(2);
     expect(tiles[0]).toHaveAttribute("data-shader-id", "custom-2");
     expect(tiles[1]).toHaveAttribute("data-shader-id", "custom-1");

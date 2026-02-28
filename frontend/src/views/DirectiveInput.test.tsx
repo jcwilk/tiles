@@ -10,10 +10,10 @@ describe("DirectiveInput", () => {
     render(<DirectiveInput onSubmit={vi.fn()} />);
 
     const input = screen.getByTestId("directive-input");
-    expect(input).not.toHaveClass("visible");
+    expect(input).toHaveAttribute("data-visible", "false");
 
     fireEvent.click(screen.getByRole("button", { name: "Custom directive" }));
-    expect(input).toHaveClass("visible");
+    expect(input).toHaveAttribute("data-visible", "true");
   });
 
   it("submits directive on Enter", () => {

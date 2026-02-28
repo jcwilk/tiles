@@ -145,7 +145,8 @@ describe("ToastProvider and useToast", () => {
 
     fireEvent.click(screen.getByTestId("show-success"));
     const toast = screen.getByText("Success msg");
-    expect(toast).toHaveClass("toast-success");
+    expect(toast).toBeInTheDocument();
+    expect(toast.closest("[role=alert]")).toBeInTheDocument();
   });
 
   it("renders predictable DOM with data-toast-id", () => {

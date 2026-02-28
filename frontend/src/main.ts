@@ -2,7 +2,7 @@
  * Tiles — WebGL shader composition app
  * Entry point for the frontend.
  */
-import "./styles.css";
+import "./index.css";
 import { createIndexedDBStorage, type ShaderStorage } from "./storage.js";
 import { seedIfEmpty } from "./seed.js";
 import { createTile, disposeTile, type TileElement } from "./tile.js";

@@ -4,6 +4,7 @@
 import type { ReactElement } from "react";
 import { Tile } from "../Tile.jsx";
 import type { ShaderObject } from "../types.js";
+import styles from "./EditView.module.css";
 
 export interface ContextShaderPickerProps {
   shaders: ShaderObject[];
@@ -21,7 +22,7 @@ export function ContextShaderPicker({
   const contextShaders = shaders.filter((s) => s.id !== excludeId);
 
   return (
-    <div className="edit-context-grid" data-testid="context-shader-picker">
+    <div className={styles.contextGrid} data-testid="context-shader-picker">
       {contextShaders.map((s) => (
         <label key={s.id} style={{ position: "relative", display: "block" }}>
           <input

@@ -3,6 +3,7 @@
  * Renders at the end of the grid. Calls onAddTile when clicked.
  */
 import { memo, type ReactElement } from "react";
+import styles from "./AddTileButton.module.css";
 
 export interface AddTileButtonProps {
   onAddTile: () => void;
@@ -18,9 +19,8 @@ function AddTileButtonInner({
   className,
 }: AddTileButtonProps): ReactElement {
   const classNames = [
-    "tile",
-    "tile-add-new",
-    loading && "tile-add-loading",
+    styles.root,
+    loading && styles.loading,
     className,
   ]
     .filter(Boolean)
@@ -33,9 +33,10 @@ function AddTileButtonInner({
       onClick={onAddTile}
       disabled={disabled}
       aria-label="Add new tile"
+      data-testid="add-tile-button"
     >
-      <span className="tile-add-icon">+</span>
-      <span className="tile-add-label">{loading ? "Processing…" : "Add tile"}</span>
+      <span className={styles.icon}>+</span>
+      <span className={styles.label}>{loading ? "Processing…" : "Add tile"}</span>
     </button>
   );
 }

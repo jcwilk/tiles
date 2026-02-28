@@ -7,6 +7,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useShaders, useDeleteShader } from "../shader-context.js";
 import { isBuiltInTile } from "../builtin.js";
 import { Tile } from "../Tile.jsx";
+import styles from "./FullscreenView.module.css";
 
 export interface FullscreenViewProps {
   shaderId: string;
@@ -46,7 +47,7 @@ export function FullscreenView({ shaderId }: FullscreenViewProps): ReactElement 
 
   if (loading) {
     return (
-      <div className="fullscreen" role="main" data-testid="fullscreen-view">
+      <div className={styles.fullscreen} role="main" data-testid="fullscreen-view">
         <p>Loading…</p>
       </div>
     );
@@ -55,7 +56,7 @@ export function FullscreenView({ shaderId }: FullscreenViewProps): ReactElement 
   // Redirecting — render nothing briefly to avoid flash
   if (!shader) {
     return (
-      <div className="fullscreen" role="main" data-testid="fullscreen-view">
+      <div className={styles.fullscreen} role="main" data-testid="fullscreen-view">
         <p>Loading…</p>
       </div>
     );
@@ -64,10 +65,10 @@ export function FullscreenView({ shaderId }: FullscreenViewProps): ReactElement 
   const isBuiltin = isBuiltInTile(shader);
 
   return (
-    <div className="fullscreen" role="main" data-testid="fullscreen-view">
+    <div className={styles.fullscreen} role="main" data-testid="fullscreen-view">
       <button
         type="button"
-        className="fullscreen-close"
+        className={styles.close}
         aria-label="Close"
         onClick={handleClose}
       >
@@ -75,7 +76,7 @@ export function FullscreenView({ shaderId }: FullscreenViewProps): ReactElement 
       </button>
       <button
         type="button"
-        className="fullscreen-close"
+        className={styles.close}
         aria-label="Edit"
         style={{ top: "0.5rem", right: "3rem" }}
         onClick={handleEdit}
@@ -88,6 +89,7 @@ export function FullscreenView({ shaderId }: FullscreenViewProps): ReactElement 
         onClick={() => {}}
         onDelete={isBuiltin ? undefined : handleDelete}
         isBuiltin={isBuiltin}
+        fullscreen
       />
     </div>
   );

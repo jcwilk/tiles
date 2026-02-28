@@ -54,22 +54,20 @@ describe("Tile", () => {
   });
 
   it("applies data-shader-id and className", () => {
-    const { container } = render(
-      <Tile shader={MOCK_SHADER} className="custom-tile" />
-    );
+    render(<Tile shader={MOCK_SHADER} className="custom-tile" />);
 
-    const tile = container.querySelector(".tile.custom-tile");
+    const tile = screen.getByTestId("tile");
     expect(tile).toBeInTheDocument();
     expect(tile).toHaveAttribute("data-shader-id", "test-1");
+    expect(tile).toHaveClass("custom-tile");
   });
 
   it("calls onClick when tile is clicked", () => {
     const onClick = vi.fn();
-    const { container } = render(<Tile shader={MOCK_SHADER} onClick={onClick} />);
+    render(<Tile shader={MOCK_SHADER} onClick={onClick} />);
 
-    const tile = container.querySelector(".tile");
-    expect(tile).toBeInTheDocument();
-    fireEvent.click(tile!);
+    const tile = screen.getByTestId("tile");
+    fireEvent.click(tile);
 
     expect(onClick).toHaveBeenCalledOnce();
   });
@@ -117,11 +115,10 @@ describe("Tile", () => {
     render(<Tile shader={MOCK_SHADER} />);
 
     expect(screen.getByRole("button", { name: "Click to resume" })).toBeInTheDocument();
-    expect(document.querySelector(".tile-paused")).toBeInTheDocument();
-    expect(document.querySelector(".tile-paused-snapshot")).toHaveAttribute(
-      "src",
-      "data:image/png;base64,abc"
-    );
+    expect(screen.getByTestId("tile-paused")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("tile-paused").querySelector("img")
+    ).toHaveAttribute("src", "data:image/png;base64,abc");
   });
 
   it("calls recover when context-loss placeholder is clicked", () => {
@@ -138,9 +135,8 @@ describe("Tile", () => {
     mockEngine = null;
     render(<Tile shader={MOCK_SHADER} />);
 
-    expect(document.querySelector(".tile-error")).toBeInTheDocument();
-    expect(document.querySelector(".tile-error")?.textContent).toContain(
-      "Too many active shaders"
-    );
+    const errorEl = screen.getByTestId("tile-error");
+    expect(errorEl).toBeInTheDocument();
+    expect(errorEl).toHaveTextContent("Too many active shaders");
   });
 });

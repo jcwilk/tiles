@@ -11,6 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import styles from "./Toast.module.css";
 
 export interface ToastMessage {
   id: string;
@@ -127,7 +128,7 @@ function ToastContainer({
 }: ToastContainerProps): ReactNode {
   return (
     <div
-      className="toast-container"
+      className={styles.container}
       aria-live="polite"
       aria-label="Notifications"
     >
@@ -165,7 +166,7 @@ function ToastItem({
 
   const handleAnimationEnd = useCallback(
     (e: React.AnimationEvent) => {
-      if (e.animationName === "toast-exit-stack") {
+      if (e.animationName.includes("Exit") || e.animationName.includes("exit")) {
         onExited(toast.id);
       }
     },
@@ -181,10 +182,17 @@ function ToastItem({
     return () => clearTimeout(t);
   }, [isExiting, toast.id]);
 
+  const typeClass =
+    toast.type === "info"
+      ? styles.info
+      : toast.type === "success"
+        ? styles.success
+        : "";
+
   return (
     <div
       role="alert"
-      className={`toast toast-${toast.type ?? "error"} ${isExiting ? "toast-exit" : ""}`}
+      className={`${styles.toast} ${typeClass} ${isExiting ? styles.exit : ""}`}
       data-toast-id={toast.id}
       onClick={handleClick}
       onAnimationEnd={handleAnimationEnd}

@@ -10,6 +10,7 @@ import { Tile } from "../Tile.jsx";
 import { SuggestionCard, type SuggestionTier } from "./SuggestionCard.jsx";
 import { DirectiveInput } from "./DirectiveInput.jsx";
 import { ContextShaderPicker } from "./ContextShaderPicker.jsx";
+import styles from "./EditView.module.css";
 
 const TIERS: SuggestionTier[] = ["conservative", "moderate", "wild"];
 
@@ -63,7 +64,7 @@ export function EditView({ shaderId }: EditViewProps): ReactElement {
 
   if (loading) {
     return (
-      <div className="edit-view" role="main" data-testid="edit-view">
+      <div className={styles.editView} role="main" data-testid="edit-view">
         <p>Loading…</p>
       </div>
     );
@@ -71,13 +72,12 @@ export function EditView({ shaderId }: EditViewProps): ReactElement {
 
   if (!shader) {
     return (
-      <div className="edit-view" role="main" data-testid="edit-view">
+      <div className={styles.editView} role="main" data-testid="edit-view">
         <button
           type="button"
-          className="fullscreen-close"
+          className={styles.close}
           aria-label="Close"
           onClick={() => navigate("/")}
-          style={{ top: "0.5rem", right: "0.5rem" }}
         >
           ×
         </button>
@@ -87,18 +87,17 @@ export function EditView({ shaderId }: EditViewProps): ReactElement {
   }
 
   return (
-    <div className="edit-view" role="main" data-testid="edit-view">
+    <div className={styles.editView} role="main" data-testid="edit-view">
       <button
         type="button"
-        className="fullscreen-close"
+        className={styles.close}
         aria-label="Close"
         onClick={handleClose}
-        style={{ top: "0.5rem", right: "0.5rem" }}
       >
         ×
       </button>
 
-      <div className="edit-view-shader" data-testid="edit-view-shader">
+      <div className={styles.shader} data-testid="edit-view-shader">
         <Tile shader={shader} priority="fullscreen" />
       </div>
 

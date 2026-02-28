@@ -3,6 +3,7 @@
  * Shows loading state or suggestion text. Clickable when not loading.
  */
 import type { ReactElement } from "react";
+import styles from "./EditView.module.css";
 
 export type SuggestionTier = "conservative" | "moderate" | "wild";
 
@@ -30,7 +31,7 @@ export function SuggestionCard({
 
   return (
     <div
-      className={`edit-suggestion ${isLoading ? "loading" : ""}`}
+      className={`${styles.suggestion} ${isLoading ? styles.loading : ""}`}
       data-tier={tier}
       data-suggestion={suggestion}
       data-testid={`suggestion-${tier}`}

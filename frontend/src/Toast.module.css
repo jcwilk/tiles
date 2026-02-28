@@ -1,0 +1,100 @@
+/**
+ * Toast — toast container, animations
+ */
+.container {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  align-items: center;
+  pointer-events: none;
+}
+
+.container .toast {
+  pointer-events: auto;
+  position: relative;
+  left: auto;
+  transform: none;
+  animation: toastEnterStack 0.2s ease-out;
+}
+
+.container .toast.exit {
+  animation: toastExitStack 0.2s ease-in forwards;
+}
+
+.toast {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  padding: 0.75rem 1.25rem;
+  background: #c62828;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  animation: toastEnter 0.2s ease-out;
+  max-width: min(90vw, 400px);
+}
+
+.exit {
+  animation: toastExit 0.2s ease-in forwards;
+}
+
+.info {
+  background: #1565c0;
+}
+
+.success {
+  background: #2e7d32;
+}
+
+@keyframes toastEnter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes toastExit {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0.5rem);
+  }
+}
+
+@keyframes toastEnterStack {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastExitStack {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}

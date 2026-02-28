@@ -4,6 +4,7 @@
  * delete button, and click-to-expand. Uses useVisibility to auto-set priority in grid mode.
  */
 import { useRef, useEffect, useCallback, useMemo, memo, type ReactElement } from "react";
+import styles from "./Tile.module.css";
 import type { ShaderObject } from "./types.js";
 import { useShaderEngine, type ShaderPriority } from "./useShaderEngine.js";
 import { useVisibility } from "./useVisibility.js";
@@ -15,6 +16,8 @@ export interface TileProps {
   onDelete?: () => void;
   isBuiltin?: boolean;
   className?: string;
+  /** When true, applies fullscreen layout overrides */
+  fullscreen?: boolean;
 }
 
 function TileInner({
@@ -24,6 +27,7 @@ function TileInner({
   onDelete,
   isBuiltin = false,
   className,
+  fullscreen = false,
 }: TileProps): ReactElement {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -68,7 +72,7 @@ function TileInner({
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement).closest?.(".tile-delete")) return;
+      if ((e.target as HTMLElement).closest?.("[data-action=delete]")) return;
       onClick?.();
     },
     [onClick]
@@ -98,12 +102,15 @@ function TileInner({
       ? "Too many active shaders — close some tiles"
       : "Shader failed to load";
 
-  const classNames = ["tile", className].filter(Boolean).join(" ");
+  const classNames = [styles.tile, fullscreen && styles.fullscreen, className]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div
       ref={wrapperRef}
       className={classNames}
+      data-testid="tile"
       data-shader-id={shader.id}
       onClick={handleClick}
       role="button"
@@ -122,7 +129,8 @@ function TileInner({
       />
       {hasContextLoss && (
         <div
-          className="tile-paused"
+          className={styles.paused}
+          data-testid="tile-paused"
           onClick={handleRecoverClick}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -139,20 +147,25 @@ function TileInner({
             <img
               src={snapshot}
               alt="Paused shader"
-              className="tile-paused-snapshot"
+              className={styles.pausedSnapshot}
             />
           ) : (
-            <div className="tile-paused-fallback">Paused</div>
+            <div className={styles.pausedFallback}>Paused</div>
           )}
-          <div className="tile-paused-overlay">Click to resume</div>
+          <div className={styles.pausedOverlay}>Click to resume</div>
         </div>
       )}
-      {showError && <div className="tile-error">{errorMessage}</div>}
-      <span className="tile-label">{shader.name}</span>
+      {showError && (
+        <div className={styles.error} data-testid="tile-error">
+          {errorMessage}
+        </div>
+      )}
+      <span className={styles.label}>{shader.name}</span>
       {showDelete && (
         <button
           type="button"
-          className="tile-delete"
+          className={styles.delete}
+          data-action="delete"
           onClick={handleDeleteClick}
           aria-label="Delete tile"
         >

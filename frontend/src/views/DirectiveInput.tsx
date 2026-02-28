@@ -2,6 +2,7 @@
  * Custom directive text input with pencil toggle and submit.
  */
 import { useState, useCallback, useRef, useEffect, type ReactElement } from "react";
+import styles from "./EditView.module.css";
 
 export interface DirectiveInputProps {
   onSubmit: (directive: string) => void;
@@ -49,7 +50,8 @@ export function DirectiveInput({
       <input
         ref={inputRef}
         type="text"
-        className={`edit-directive-input ${visible ? "visible" : ""}`}
+        className={`${styles.directiveInput} ${visible ? styles.visible : ""}`}
+        data-visible={visible}
         placeholder={placeholder}
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -58,21 +60,12 @@ export function DirectiveInput({
         data-testid="directive-input"
         aria-label="Custom directive"
       />
-      <div className="edit-actions">
+      <div className={styles.actions}>
         <button
           type="button"
+          className={styles.actionsButton}
           aria-label="Custom directive"
           onClick={toggleVisible}
-          style={{
-            width: "2.5rem",
-            height: "2.5rem",
-            borderRadius: "50%",
-            border: "none",
-            background: "rgba(255,255,255,0.2)",
-            color: "#fff",
-            fontSize: "1.1rem",
-            cursor: "pointer",
-          }}
         >
           ✎
         </button>

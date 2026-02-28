@@ -13,6 +13,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGenerateFromPrompt } from "./api-hooks.js";
+import styles from "./AddTileDialog.module.css";
 
 export interface AddTileDialogProps {
   isOpen: boolean;
@@ -76,23 +77,23 @@ export function AddTileDialog({
 
   return (
     <div
-      className="add-tile-dialog-backdrop"
+      className={styles.backdrop}
       role="dialog"
       aria-modal="true"
       aria-labelledby="add-tile-dialog-title"
       onClick={handleBackdropClick}
       onKeyDown={handleKeyDown}
     >
-      <div className="add-tile-dialog">
+      <div className={styles.dialog}>
         <h2 id="add-tile-dialog-title">Add new tile</h2>
-        <p className="add-tile-dialog-hint">
+        <p className={styles.hint}>
           Describe your shader (e.g. blue gradient, red plasma)
         </p>
         <form onSubmit={handleSubmit}>
           <input
             ref={inputRef}
             type="text"
-            className="add-tile-dialog-input"
+            className={styles.input}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Describe your shader…"
@@ -100,10 +101,10 @@ export function AddTileDialog({
             aria-label="Shader prompt"
             data-testid="add-tile-prompt-input"
           />
-          <div className="add-tile-dialog-actions">
+          <div className={styles.actions}>
             <button
               type="button"
-              className="add-tile-dialog-cancel"
+              className={styles.cancel}
               onClick={onClose}
               disabled={isLoading}
             >
@@ -111,7 +112,7 @@ export function AddTileDialog({
             </button>
             <button
               type="submit"
-              className="add-tile-dialog-submit"
+              className={styles.submit}
               disabled={!prompt.trim() || isLoading}
               data-testid="add-tile-submit"
             >

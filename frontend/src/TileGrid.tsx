@@ -8,6 +8,7 @@ import type { ShaderObject } from "./types.js";
 import { Tile } from "./Tile.jsx";
 import { AddTileButton } from "./AddTileButton.jsx";
 import { isBuiltInTile } from "./builtin.js";
+import styles from "./TileGrid.module.css";
 
 export interface TileGridProps {
   shaders: ShaderObject[];
@@ -33,7 +34,7 @@ function TileGridInner({
   );
 
   return (
-    <div className="tiles-grid" data-testid="tile-grid">
+    <div className={styles.grid} data-testid="tile-grid">
       {sortedShaders.map((shader) => (
         <Tile
           key={shader.id}
