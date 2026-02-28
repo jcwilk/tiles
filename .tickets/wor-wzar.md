@@ -1,6 +1,6 @@
 ---
 id: wor-wzar
-status: open
+status: closed
 deps: [wor-9s1n, wor-kl15]
 links: []
 created: 2026-02-27T02:33:43Z

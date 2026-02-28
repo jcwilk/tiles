@@ -4,7 +4,7 @@ import type { ShaderStorage } from "./storage.js";
 import { ToastProvider } from "./toast-context.js";
 import { ShaderProvider, useShaderContext, useDeleteShader } from "./shader-context.js";
 import { TileGrid } from "./TileGrid.jsx";
-import { performAddFromPrompt } from "./add-from-prompt.js";
+import { AddTileDialog } from "./AddTileDialog.jsx";
 import { FullscreenViewRoute } from "./views/FullscreenView.jsx";
 import { EditViewRoute } from "./views/EditViewRoute.jsx";
 
@@ -16,13 +16,13 @@ export interface AppProps {
 /**
  * Grid view with TileGrid. Uses ShaderProvider for state.
  * onTileClick navigates to /tile/:id (fullscreen).
- * onAddTile: prompt + performAddFromPrompt.
+ * onAddTile opens AddTileDialog.
  */
 function GridView(): ReactElement {
   const navigate = useNavigate();
-  const { shaders, loading, storage, refresh } = useShaderContext();
+  const { shaders, loading } = useShaderContext();
   const { deleteShader } = useDeleteShader();
-  const [addTileLoading, setAddTileLoading] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const onTileClick = useCallback(
     (id: string) => {
@@ -42,16 +42,9 @@ function GridView(): ReactElement {
     [deleteShader]
   );
 
-  const onAddTile = useCallback(async () => {
-    if (!storage) return;
-    const prompt = window.prompt("Describe your shader (e.g. blue gradient, red plasma)");
-    if (!prompt?.trim()) return;
-
-    setAddTileLoading(true);
-    const result = await performAddFromPrompt(prompt.trim(), storage);
-    setAddTileLoading(false);
-    if (result.success) await refresh();
-  }, [storage, refresh]);
+  const onAddTile = useCallback(() => {
+    setAddDialogOpen(true);
+  }, []);
 
   if (loading) {
     return (
@@ -68,7 +61,10 @@ function GridView(): ReactElement {
         onTileClick={onTileClick}
         onTileDelete={onTileDelete}
         onAddTile={onAddTile}
-        addTileLoading={addTileLoading}
+      />
+      <AddTileDialog
+        isOpen={addDialogOpen}
+        onClose={() => setAddDialogOpen(false)}
       />
     </div>
   );

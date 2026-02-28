@@ -342,6 +342,104 @@ body {
   background: #2e7d32;
 }
 
+/* Add tile dialog */
+.add-tile-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.add-tile-dialog {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: min(90vw, 420px);
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.add-tile-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.add-tile-dialog-hint {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: rgba(200, 220, 255, 0.7);
+}
+
+.add-tile-dialog-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  background: #2a2a2a;
+  color: #e0e0e0;
+  margin-bottom: 1rem;
+}
+
+.add-tile-dialog-input:focus {
+  outline: none;
+  border-color: rgba(100, 180, 255, 0.6);
+}
+
+.add-tile-dialog-input::placeholder {
+  color: rgba(200, 220, 255, 0.4);
+}
+
+.add-tile-dialog-input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.add-tile-dialog-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.add-tile-dialog-cancel,
+.add-tile-dialog-submit {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  border-radius: 8px;
+  cursor: pointer;
+  border: none;
+}
+
+.add-tile-dialog-cancel {
+  background: transparent;
+  color: rgba(200, 220, 255, 0.8);
+}
+
+.add-tile-dialog-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.add-tile-dialog-submit {
+  background: rgba(100, 180, 255, 0.4);
+  color: #fff;
+}
+
+.add-tile-dialog-submit:hover:not(:disabled) {
+  background: rgba(100, 180, 255, 0.6);
+}
+
+.add-tile-dialog-submit:disabled,
+.add-tile-dialog-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Edit view */
 .edit-view {
   position: fixed;
