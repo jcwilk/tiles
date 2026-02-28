@@ -5,7 +5,7 @@ import { ToastProvider } from "./toast-context.js";
 import { ShaderProvider, useShaderContext, useDeleteShader } from "./shader-context.js";
 import { TileGrid } from "./TileGrid.jsx";
 import { performAddFromPrompt } from "./add-from-prompt.js";
-import { FullscreenView } from "./views/FullscreenView.jsx";
+import { FullscreenViewRoute } from "./views/FullscreenView.jsx";
 import { EditViewRoute } from "./views/EditViewRoute.jsx";
 
 export interface AppProps {
@@ -82,7 +82,7 @@ function AppLayout(): ReactElement {
     <main id="app-shell">
       <Routes>
         <Route path="/" element={<GridView />} />
-        <Route path="/tile/:id" element={<FullscreenView />} />
+        <Route path="/tile/:id" element={<FullscreenViewRoute />} />
         <Route path="/tile/:id/edit" element={<EditViewRoute />} />
       </Routes>
     </main>

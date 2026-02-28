@@ -1,19 +1,48 @@
 /**
  * Fullscreen view of a single tile.
- * Placeholder/minimal until wor-bhzq (Fullscreen tile view component).
- * Route: /tile/:id
+ * Route: /tile/:id — use FullscreenViewRoute for route integration.
  */
-import type { ReactElement } from "react";
+import { useEffect, useCallback, type ReactElement } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useShaderContext } from "../shader-context.js";
+import { useShaders, useDeleteShader } from "../shader-context.js";
+import { isBuiltInTile } from "../builtin.js";
 import { Tile } from "../Tile.jsx";
 
-export function FullscreenView(): ReactElement {
-  const { id } = useParams<"id">();
-  const navigate = useNavigate();
-  const { shaders, loading } = useShaderContext();
+export interface FullscreenViewProps {
+  shaderId: string;
+}
 
-  const shader = id ? shaders.find((s) => s.id === id) : null;
+/**
+ * FullscreenView renders a single shader tile in full-viewport with close, edit,
+ * and delete (for non-builtin) actions. Uses useShaders() for lookup. Redirects
+ * to grid when shaderId doesn't match any shader. Tile uses priority='fullscreen'.
+ */
+export function FullscreenView({ shaderId }: FullscreenViewProps): ReactElement {
+  const navigate = useNavigate();
+  const { shaders, loading } = useShaders();
+  const { deleteShader } = useDeleteShader();
+
+  const shader = shaders.find((s) => s.id === shaderId);
+
+  // Redirect to grid when shader doesn't exist (after load)
+  useEffect(() => {
+    if (!loading && !shader) {
+      navigate("/", { replace: true });
+    }
+  }, [loading, shader, navigate]);
+
+  const handleClose = useCallback(() => {
+    navigate("/");
+  }, [navigate]);
+
+  const handleEdit = useCallback(() => {
+    navigate(`/tile/${shaderId}/edit`);
+  }, [navigate, shaderId]);
+
+  const handleDelete = useCallback(async () => {
+    await deleteShader(shaderId);
+    navigate("/");
+  }, [deleteShader, shaderId, navigate]);
 
   if (loading) {
     return (
@@ -23,21 +52,16 @@ export function FullscreenView(): ReactElement {
     );
   }
 
+  // Redirecting — render nothing briefly to avoid flash
   if (!shader) {
     return (
       <div className="fullscreen" role="main" data-testid="fullscreen-view">
-        <button
-          type="button"
-          className="fullscreen-close"
-          aria-label="Close"
-          onClick={() => navigate("/")}
-        >
-          ×
-        </button>
-        <p>Tile not found</p>
+        <p>Loading…</p>
       </div>
     );
   }
+
+  const isBuiltin = isBuiltInTile(shader);
 
   return (
     <div className="fullscreen" role="main" data-testid="fullscreen-view">
@@ -45,7 +69,7 @@ export function FullscreenView(): ReactElement {
         type="button"
         className="fullscreen-close"
         aria-label="Close"
-        onClick={() => navigate(-1)}
+        onClick={handleClose}
       >
         ×
       </button>
@@ -54,7 +78,7 @@ export function FullscreenView(): ReactElement {
         className="fullscreen-close"
         aria-label="Edit"
         style={{ top: "0.5rem", right: "3rem" }}
-        onClick={() => navigate(`/tile/${shader.id}/edit`)}
+        onClick={handleEdit}
       >
         ✎
       </button>
@@ -62,9 +86,18 @@ export function FullscreenView(): ReactElement {
         shader={shader}
         priority="fullscreen"
         onClick={() => {}}
-        onDelete={undefined}
-        isBuiltin={false}
+        onDelete={isBuiltin ? undefined : handleDelete}
+        isBuiltin={isBuiltin}
       />
     </div>
   );
+}
+
+/**
+ * Route wrapper: reads :id from params and passes to FullscreenView.
+ */
+export function FullscreenViewRoute(): ReactElement | null {
+  const { id } = useParams<"id">();
+  if (!id) return null;
+  return <FullscreenView shaderId={id} />;
 }

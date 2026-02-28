@@ -75,14 +75,13 @@ describe("main.tsx", () => {
     expect(screen.getByText(/Edit: test-shader-2/)).toBeInTheDocument();
   });
 
-  it("shows tile not found for unknown tile id in fullscreen", async () => {
+  it("redirects to grid when shader id does not exist", async () => {
     const storage = createInMemoryStorage();
     renderApp({ storage, route: "/tile/nonexistent-id" });
 
     await waitFor(() => {
-      expect(screen.getByTestId("fullscreen-view")).toBeInTheDocument();
+      expect(screen.getByTestId("tile-grid")).toBeInTheDocument();
     });
-    expect(screen.getByText("Tile not found")).toBeInTheDocument();
   });
 
   it("close button in fullscreen navigates back to grid", async () => {
@@ -104,10 +103,50 @@ describe("main.tsx", () => {
     await waitFor(() => {
       expect(screen.getByTestId("fullscreen-view")).toBeInTheDocument();
     });
-    // Close button triggers navigate(-1), returning to grid
+    // Close button navigates to grid
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(screen.getByTestId("tile-grid")).toBeInTheDocument();
     });
+  });
+
+  it("edit button in fullscreen navigates to edit view", async () => {
+    const storage = createInMemoryStorage();
+    await storage.add({
+      id: "edit-test",
+      name: "Edit Test",
+      vertexSource: "",
+      fragmentSource: "void main(){gl_FragColor=vec4(0.);}",
+      createdAt: Date.now(),
+    });
+    renderApp({ storage, route: "/tile/edit-test" });
+    await waitFor(() => {
+      expect(screen.getByTestId("fullscreen-view")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("edit-view")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Edit: edit-test/)).toBeInTheDocument();
+  });
+
+  it("delete button removes shader and navigates to grid", async () => {
+    const storage = createInMemoryStorage();
+    await storage.add({
+      id: "delete-test",
+      name: "Delete Test",
+      vertexSource: "",
+      fragmentSource: "void main(){gl_FragColor=vec4(0.);}",
+      createdAt: Date.now(),
+    });
+    renderApp({ storage, route: "/tile/delete-test" });
+    await waitFor(() => {
+      expect(screen.getByTestId("fullscreen-view")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Delete tile" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("tile-grid")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Delete Test")).not.toBeInTheDocument();
   });
 });
