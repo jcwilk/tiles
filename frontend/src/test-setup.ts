@@ -2,6 +2,11 @@
  * Test setup for Vitest/jsdom.
  * Mocks browser APIs not available in jsdom.
  */
+import "@testing-library/jest-dom";
+import { cleanup } from "@testing-library/react";
+import { afterEach } from "vitest";
+
+afterEach(() => cleanup());
 
 // jsdom lacks elementFromPoint; stub returns null (no hit-testing in tests)
 if (typeof document.elementFromPoint !== "function") {
