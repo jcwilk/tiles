@@ -1,9 +1,12 @@
 import { useCallback, useState, type ReactElement } from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import type { ShaderStorage } from "./storage.js";
 import { ToastProvider } from "./toast-context.js";
 import { ShaderProvider, useShaderContext, useDeleteShader } from "./shader-context.js";
 import { TileGrid } from "./TileGrid.jsx";
 import { performAddFromPrompt } from "./add-from-prompt.js";
+import { FullscreenView } from "./views/FullscreenView.jsx";
+import { EditViewRoute } from "./views/EditViewRoute.jsx";
 
 export interface AppProps {
   /** Optional storage for tests. Uses IndexedDB when omitted. */
@@ -12,17 +15,21 @@ export interface AppProps {
 
 /**
  * Grid view with TileGrid. Uses ShaderProvider for state.
- * onTileClick: placeholder until fullscreen component (wor-bhzq).
+ * onTileClick navigates to /tile/:id (fullscreen).
  * onAddTile: prompt + performAddFromPrompt.
  */
-function AppContent(): ReactElement {
+function GridView(): ReactElement {
+  const navigate = useNavigate();
   const { shaders, loading, storage, refresh } = useShaderContext();
   const { deleteShader } = useDeleteShader();
   const [addTileLoading, setAddTileLoading] = useState(false);
 
-  const onTileClick = useCallback((_id: string) => {
-    // Fullscreen handled by wor-bhzq
-  }, []);
+  const onTileClick = useCallback(
+    (id: string) => {
+      navigate(`/tile/${id}`);
+    },
+    [navigate]
+  );
 
   const onTileDelete = useCallback(
     async (id: string) => {
@@ -48,14 +55,14 @@ function AppContent(): ReactElement {
 
   if (loading) {
     return (
-      <div id="app-root" data-react-root>
+      <div id="app-root" data-react-root data-testid="grid-view">
         <p>Loading…</p>
       </div>
     );
   }
 
   return (
-    <div id="app-root" data-react-root>
+    <div id="app-root" data-react-root data-testid="grid-view">
       <TileGrid
         shaders={shaders}
         onTileClick={onTileClick}
@@ -68,13 +75,29 @@ function AppContent(): ReactElement {
 }
 
 /**
- * Minimal root component for React migration.
+ * Minimal layout shell. Renders route content.
+ */
+function AppLayout(): ReactElement {
+  return (
+    <main id="app-shell">
+      <Routes>
+        <Route path="/" element={<GridView />} />
+        <Route path="/tile/:id" element={<FullscreenView />} />
+        <Route path="/tile/:id/edit" element={<EditViewRoute />} />
+      </Routes>
+    </main>
+  );
+}
+
+/**
+ * Root component with React Router. ShaderProvider and ToastProvider wrap all routes.
+ * Routes: / (TileGrid), /tile/:id (fullscreen), /tile/:id/edit (edit).
  */
 export function App({ storage }: AppProps = {}): ReactElement {
   return (
     <ToastProvider>
       <ShaderProvider storage={storage}>
-        <AppContent />
+        <AppLayout />
       </ShaderProvider>
     </ToastProvider>
   );

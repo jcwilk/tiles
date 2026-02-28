@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { createInMemoryStorage } from "./storage.js";
 import { App } from "./App.js";
 
@@ -19,14 +20,94 @@ vi.mock("./useVisibility.js", () => ({
 
 vi.stubGlobal("ResizeObserver", vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })));
 
+function renderApp(
+  options: { storage?: ReturnType<typeof createInMemoryStorage>; route?: string } = {}
+) {
+  const { storage = createInMemoryStorage(), route = "/" } = options;
+  return render(
+    <MemoryRouter initialEntries={[route]}>
+      <App storage={storage} />
+    </MemoryRouter>
+  );
+}
+
 describe("main.tsx", () => {
-  it("renders TileGrid after loading", async () => {
+  it("renders TileGrid at root route after loading", async () => {
     const storage = createInMemoryStorage();
-    render(<App storage={storage} />);
+    renderApp({ storage, route: "/" });
 
     await waitFor(() => {
       expect(screen.getByTestId("tile-grid")).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: "Add new tile" })).toBeInTheDocument();
+  });
+
+  it("renders fullscreen view at /tile/:id", async () => {
+    const storage = createInMemoryStorage();
+    await storage.add({
+      id: "test-shader-1",
+      name: "Test",
+      vertexSource: "",
+      fragmentSource: "void main(){gl_FragColor=vec4(0.);}",
+      createdAt: Date.now(),
+    });
+    renderApp({ storage, route: "/tile/test-shader-1" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("fullscreen-view")).toBeInTheDocument();
+    });
+  });
+
+  it("renders edit view at /tile/:id/edit", async () => {
+    const storage = createInMemoryStorage();
+    await storage.add({
+      id: "test-shader-2",
+      name: "Test",
+      vertexSource: "",
+      fragmentSource: "void main(){gl_FragColor=vec4(0.);}",
+      createdAt: Date.now(),
+    });
+    renderApp({ storage, route: "/tile/test-shader-2/edit" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("edit-view")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Edit: test-shader-2/)).toBeInTheDocument();
+  });
+
+  it("shows tile not found for unknown tile id in fullscreen", async () => {
+    const storage = createInMemoryStorage();
+    renderApp({ storage, route: "/tile/nonexistent-id" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("fullscreen-view")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Tile not found")).toBeInTheDocument();
+  });
+
+  it("close button in fullscreen navigates back to grid", async () => {
+    const storage = createInMemoryStorage();
+    await storage.add({
+      id: "back-test",
+      name: "Back Test",
+      vertexSource: "",
+      fragmentSource: "void main(){gl_FragColor=vec4(0.);}",
+      createdAt: Date.now(),
+    });
+    // Navigate from grid to fullscreen so back button has somewhere to go
+    renderApp({ storage, route: "/" });
+    await waitFor(() => {
+      expect(screen.getByTestId("tile-grid")).toBeInTheDocument();
+    });
+    // Simulate clicking a tile to navigate to fullscreen
+    fireEvent.click(screen.getByText("Back Test"));
+    await waitFor(() => {
+      expect(screen.getByTestId("fullscreen-view")).toBeInTheDocument();
+    });
+    // Close button triggers navigate(-1), returning to grid
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("tile-grid")).toBeInTheDocument();
+    });
   });
 });
