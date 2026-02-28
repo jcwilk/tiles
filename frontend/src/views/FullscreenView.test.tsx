@@ -7,14 +7,10 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { FullscreenView } from "./FullscreenView.jsx";
 import type { ShaderObject } from "../types.js";
+import { createMockShader } from "../test-utils.js";
 
-const createShader = (id: string, name: string): ShaderObject => ({
-  id,
-  name,
-  vertexSource: "in vec2 a_position;",
-  fragmentSource: "[VALID CODE]",
-  createdAt: Date.now(),
-});
+const createShader = (id: string, name: string): ShaderObject =>
+  createMockShader({ id, name });
 
 const mockNavigate = vi.fn();
 

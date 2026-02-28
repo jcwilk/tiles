@@ -5,15 +5,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Tile } from "./Tile.jsx";
-import type { ShaderObject } from "./types.js";
+import { createMockShader } from "./test-utils.js";
 
-const MOCK_SHADER: ShaderObject = {
+const MOCK_SHADER = createMockShader({
   id: "test-1",
   name: "Placeholder Shader",
-  vertexSource: "in vec2 a_position;",
-  fragmentSource: "[VALID CODE]",
-  createdAt: Date.now(),
-};
+});
 
 let mockEngine: { resize: ReturnType<typeof vi.fn> } | null = null;
 let mockHasContextLoss = false;

@@ -2,12 +2,8 @@
  * API hooks tests: compile-retry, state transitions, parallel suggestions.
  * Uses createMockFetchHarness with [VALID CODE]/[INVALID CODE].
  */
-import type { ReactNode } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { createInMemoryStorage } from "./storage.js";
-import { ShaderProvider } from "./shader-context.js";
-import { ToastProvider } from "./toast-context.js";
 import {
   useGenerateFromPrompt,
   useFetchSuggestions,
@@ -18,28 +14,19 @@ import {
   VALID_CODE,
   INVALID_CODE,
 } from "./test-harness.js";
-import type { ShaderObject } from "./types.js";
+import {
+  createWrapperForHook,
+  createMockShader,
+} from "./test-utils.js";
 
-const MOCK_SHADER: ShaderObject = {
+const MOCK_SHADER = createMockShader({
   id: "s1",
   name: "Test",
-  vertexSource: "#version 300 es\nin vec2 a_position; out vec2 v_uv; void main(){ v_uv=a_position*0.5+0.5; gl_Position=vec4(a_position,0,1); }",
+  vertexSource:
+    "#version 300 es\nin vec2 a_position; out vec2 v_uv; void main(){ v_uv=a_position*0.5+0.5; gl_Position=vec4(a_position,0,1); }",
   fragmentSource: "void main(){ fragColor=vec4(1,0,0,1); }",
   createdAt: 0,
-};
-
-function createWrapper(needsShader = true): ({ children }: { children: ReactNode }) => ReactNode {
-  const storage = createInMemoryStorage();
-  return ({ children }: { children: ReactNode }) => (
-    <ToastProvider>
-      {needsShader ? (
-        <ShaderProvider storage={storage}>{children}</ShaderProvider>
-      ) : (
-        children
-      )}
-    </ToastProvider>
-  );
-}
+});
 
 describe("useGenerateFromPrompt", () => {
   const originalFetch = globalThis.fetch;
@@ -49,7 +36,7 @@ describe("useGenerateFromPrompt", () => {
   });
 
   it("returns initial state", async () => {
-    const wrapper = createWrapper();
+    const wrapper = createWrapperForHook();
     const { result } = renderHook(() => useGenerateFromPrompt(), { wrapper });
 
     await waitFor(() => {
@@ -63,7 +50,7 @@ describe("useGenerateFromPrompt", () => {
 
   it("succeeds when API returns [VALID CODE] and adds shader", async () => {
     globalThis.fetch = createMockFetchHarness({ response: VALID_CODE });
-    const wrapper = createWrapper();
+    const wrapper = createWrapperForHook();
 
     const { result } = renderHook(() => useGenerateFromPrompt(), { wrapper });
 
@@ -84,7 +71,7 @@ describe("useGenerateFromPrompt", () => {
 
   it("retries up to 3 times when API returns [INVALID CODE]", async () => {
     globalThis.fetch = createMockFetchHarness({ response: INVALID_CODE });
-    const wrapper = createWrapper();
+    const wrapper = createWrapperForHook();
 
     const { result } = renderHook(() => useGenerateFromPrompt(), { wrapper });
 
@@ -106,7 +93,7 @@ describe("useGenerateFromPrompt", () => {
     globalThis.fetch = createMockFetchHarness({
       responses: [INVALID_CODE, VALID_CODE],
     });
-    const wrapper = createWrapper();
+    const wrapper = createWrapperForHook();
 
     const { result } = renderHook(() => useGenerateFromPrompt(), { wrapper });
 
@@ -127,7 +114,7 @@ describe("useGenerateFromPrompt", () => {
 
   it("does nothing when prompt is empty", async () => {
     globalThis.fetch = vi.fn();
-    const wrapper = createWrapper();
+    const wrapper = createWrapperForHook();
 
     const { result } = renderHook(() => useGenerateFromPrompt(), { wrapper });
 
@@ -162,7 +149,7 @@ describe("useFetchSuggestions", () => {
       } as Response);
     }) as typeof fetch;
 
-    const wrapper = createWrapper(false);
+    const wrapper = createWrapperForHook({ needsShader: false });
 
     const { result } = renderHook(() => useFetchSuggestions(), { wrapper });
 
@@ -199,7 +186,7 @@ describe("useFetchSuggestions", () => {
       });
     }) as typeof fetch;
 
-    const wrapper = createWrapper(false);
+    const wrapper = createWrapperForHook({ needsShader: false });
 
     const { result } = renderHook(() => useFetchSuggestions(), { wrapper });
 
@@ -243,7 +230,7 @@ describe("useApplyDirective", () => {
 
   it("succeeds when API returns [VALID CODE] and adds shader", async () => {
     globalThis.fetch = createMockFetchHarness({ response: VALID_CODE });
-    const wrapper = createWrapper();
+    const wrapper = createWrapperForHook();
 
     const { result } = renderHook(() => useApplyDirective(), { wrapper });
 
@@ -263,7 +250,7 @@ describe("useApplyDirective", () => {
 
   it("retries up to 3 times when API returns [INVALID CODE]", async () => {
     globalThis.fetch = createMockFetchHarness({ response: INVALID_CODE });
-    const wrapper = createWrapper();
+    const wrapper = createWrapperForHook();
 
     const { result } = renderHook(() => useApplyDirective(), { wrapper });
 
@@ -285,7 +272,7 @@ describe("useApplyDirective", () => {
     globalThis.fetch = createMockFetchHarness({
       responses: [INVALID_CODE, VALID_CODE],
     });
-    const wrapper = createWrapper();
+    const wrapper = createWrapperForHook();
 
     const { result } = renderHook(() => useApplyDirective(), { wrapper });
 
@@ -320,12 +307,12 @@ describe("useApplyDirective", () => {
       } as Response);
     }) as typeof fetch;
 
-    const contextShader: ShaderObject = {
+    const contextShader = createMockShader({
       ...MOCK_SHADER,
       id: "s2",
       fragmentSource: "void main(){ fragColor=vec4(0,1,0,1); }",
-    };
-    const wrapper = createWrapper();
+    });
+    const wrapper = createWrapperForHook();
 
     const { result } = renderHook(() => useApplyDirective(), { wrapper });
 

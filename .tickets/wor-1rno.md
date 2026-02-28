@@ -1,6 +1,6 @@
 ---
 id: wor-1rno
-status: open
+status: closed
 deps: [wor-njj7, wor-wzar, wor-iliz]
 links: []
 created: 2026-02-27T02:34:26Z

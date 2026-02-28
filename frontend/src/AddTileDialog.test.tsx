@@ -2,14 +2,10 @@
  * AddTileDialog component tests.
  * Verifies modal rendering, submission, loading state, success navigation, and Enter key.
  */
-import type { ReactNode } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { AddTileDialog } from "./AddTileDialog.jsx";
-import { createInMemoryStorage } from "./storage.js";
-import { ShaderProvider } from "./shader-context.js";
-import { ToastProvider } from "./toast-context.js";
+import { renderWithProviders } from "./test-utils.js";
 import {
   createMockFetchHarness,
   VALID_CODE,
@@ -26,17 +22,6 @@ vi.mock("react-router-dom", async (importOriginal) => {
   };
 });
 
-function createWrapper(): ({ children }: { children: ReactNode }) => ReactNode {
-  const storage = createInMemoryStorage();
-  return ({ children }: { children: ReactNode }) => (
-    <ToastProvider>
-      <ShaderProvider storage={storage}>
-        <MemoryRouter>{children}</MemoryRouter>
-      </ShaderProvider>
-    </ToastProvider>
-  );
-}
-
 describe("AddTileDialog", () => {
   const originalFetch = globalThis.fetch;
 
@@ -46,19 +31,13 @@ describe("AddTileDialog", () => {
   });
 
   it("renders nothing when isOpen is false", () => {
-    render(
-      <AddTileDialog isOpen={false} onClose={vi.fn()} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen={false} onClose={vi.fn()} />);
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("renders modal with text input when isOpen", () => {
-    render(
-      <AddTileDialog isOpen onClose={vi.fn()} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen onClose={vi.fn()} />);
 
     const dialog = screen.getByRole("dialog", { name: "Add new tile" });
     expect(dialog).toBeInTheDocument();
@@ -70,10 +49,7 @@ describe("AddTileDialog", () => {
 
   it("calls onClose when Cancel is clicked", () => {
     const onClose = vi.fn();
-    render(
-      <AddTileDialog isOpen onClose={onClose} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen onClose={onClose} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -88,10 +64,7 @@ describe("AddTileDialog", () => {
     globalThis.fetch = vi.fn(() => fetchPromise);
 
     const onClose = vi.fn();
-    render(
-      <AddTileDialog isOpen onClose={onClose} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen onClose={onClose} />);
 
     const input = screen.getByTestId("add-tile-prompt-input");
     fireEvent.change(input, { target: { value: "blue gradient" } });
@@ -113,10 +86,7 @@ describe("AddTileDialog", () => {
   it("submits when form is submitted (Enter key triggers form submit)", async () => {
     globalThis.fetch = createMockFetchHarness({ response: VALID_CODE });
 
-    render(
-      <AddTileDialog isOpen onClose={vi.fn()} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen onClose={vi.fn()} />);
 
     const input = screen.getByTestId("add-tile-prompt-input");
     fireEvent.change(input, { target: { value: "red plasma" } });
@@ -133,10 +103,7 @@ describe("AddTileDialog", () => {
     globalThis.fetch = createMockFetchHarness({ response: VALID_CODE });
 
     const onClose = vi.fn();
-    render(
-      <AddTileDialog isOpen onClose={onClose} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen onClose={onClose} />);
 
     const input = screen.getByTestId("add-tile-prompt-input");
     fireEvent.change(input, { target: { value: "blue gradient" } });
@@ -152,20 +119,14 @@ describe("AddTileDialog", () => {
   });
 
   it("disables submit when prompt is empty", () => {
-    render(
-      <AddTileDialog isOpen onClose={vi.fn()} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen onClose={vi.fn()} />);
 
     expect(screen.getByTestId("add-tile-submit")).toBeDisabled();
   });
 
   it("calls onClose when Escape is pressed", () => {
     const onClose = vi.fn();
-    render(
-      <AddTileDialog isOpen onClose={onClose} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen onClose={onClose} />);
 
     fireEvent.keyDown(screen.getByRole("dialog"), {
       key: "Escape",
@@ -178,10 +139,7 @@ describe("AddTileDialog", () => {
   it("shows toast on error (via hook)", async () => {
     globalThis.fetch = createMockFetchHarness({ response: INVALID_CODE });
 
-    render(
-      <AddTileDialog isOpen onClose={vi.fn()} />,
-      { wrapper: createWrapper() }
-    );
+    renderWithProviders(<AddTileDialog isOpen onClose={vi.fn()} />);
 
     const input = screen.getByTestId("add-tile-prompt-input");
     fireEvent.change(input, { target: { value: "test" } });

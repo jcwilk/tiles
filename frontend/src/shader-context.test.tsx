@@ -6,24 +6,13 @@ import type { ReactNode } from "react";
 import { describe, it, expect } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { createInMemoryStorage } from "./storage.js";
-import type { ShaderObject } from "./types.js";
+import { createMockShader } from "./test-utils.js";
 import {
   ShaderProvider,
   useShaders,
   useAddShader,
   useDeleteShader,
 } from "./shader-context.js";
-
-function createTestShader(overrides: Partial<ShaderObject> = {}): ShaderObject {
-  return {
-    id: `test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    name: "Test Shader",
-    vertexSource: "v",
-    fragmentSource: "f",
-    createdAt: Date.now(),
-    ...overrides,
-  };
-}
 
 describe("ShaderProvider and useShaders", () => {
   it("provides shaders and loading state", async () => {
@@ -62,7 +51,7 @@ describe("ShaderProvider and useShaders", () => {
     });
 
     const beforeCount = result.current.shaders.length;
-    const newShader = createTestShader({ id: "user-1", name: "User Shader" });
+    const newShader = createMockShader({ id: "user-1", name: "User Shader" });
 
     await act(async () => {
       await result.current.addShader(newShader);
@@ -77,7 +66,7 @@ describe("useDeleteShader", () => {
   it("deletes user shader and updates context", async () => {
     const storage = createInMemoryStorage();
     await storage.add(
-      createTestShader({ id: "user-delete-me", name: "Delete Me" })
+      createMockShader({ id: "user-delete-me", name: "Delete Me" })
     );
 
     const wrapper = ({ children }: { children: ReactNode }) => (

@@ -7,14 +7,13 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { EditView } from "./EditView.jsx";
 import type { ShaderObject } from "../types.js";
+import { createMockShader } from "../test-utils.js";
 
-const MOCK_SHADER: ShaderObject = {
+const MOCK_SHADER = createMockShader({
   id: "test-shader",
   name: "Test",
-  vertexSource: "in vec2 a_position;",
-  fragmentSource: "[VALID CODE]",
   createdAt: 0,
-};
+});
 
 const mockNavigate = vi.fn();
 const mockFetchSuggestions = vi.fn();

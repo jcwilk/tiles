@@ -5,19 +5,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { TileGrid } from "./TileGrid.jsx";
-import type { ShaderObject } from "./types.js";
+import { createMockShader } from "./test-utils.js";
 
-const createShader = (id: string, name: string, createdAt: number): ShaderObject => ({
-  id,
-  name,
-  vertexSource: "in vec2 a_position;",
-  fragmentSource: "[VALID CODE]",
-  createdAt,
+const SHADER_OLD = createMockShader({
+  id: "custom-1",
+  name: "Older",
+  createdAt: 1000,
 });
-
-const SHADER_OLD = createShader("custom-1", "Older", 1000);
-const SHADER_NEW = createShader("custom-2", "Newer", 2000);
-const SHADER_SEED = createShader("seed-0-123", "Gradient", 500);
+const SHADER_NEW = createMockShader({
+  id: "custom-2",
+  name: "Newer",
+  createdAt: 2000,
+});
+const SHADER_SEED = createMockShader({
+  id: "seed-0-123",
+  name: "Gradient",
+  createdAt: 500,
+});
 
 let mockEngine: { resize: ReturnType<typeof vi.fn> } | null = null;
 
