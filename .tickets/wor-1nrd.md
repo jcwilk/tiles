@@ -1,6 +1,6 @@
 ---
 id: wor-1nrd
-status: open
+status: closed
 deps: [wor-1rno]
 links: []
 created: 2026-02-27T02:34:40Z

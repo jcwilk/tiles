@@ -1,6 +1,6 @@
 /**
  * Tiles — React entry point
- * Minimal root component. Original main.ts kept for migration.
+ * Minimal root component.
  */
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
