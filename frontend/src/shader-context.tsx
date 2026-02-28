@@ -33,7 +33,7 @@ export interface UseDeleteShaderResult {
   deleteShader: (id: string) => Promise<void>;
 }
 
-interface ShaderContextValue {
+export interface ShaderContextValue {
   shaders: ShaderObject[];
   loading: boolean;
   storage: ShaderStorage | null;
@@ -95,6 +95,18 @@ export function ShaderProvider({
   return (
     <ShaderContext.Provider value={value}>{children}</ShaderContext.Provider>
   );
+}
+
+/**
+ * Returns the full shader context (shaders, loading, storage, refresh).
+ * Use when you need storage or refresh (e.g. performAddFromPrompt).
+ */
+export function useShaderContext(): ShaderContextValue {
+  const ctx = useContext(ShaderContext);
+  if (!ctx) {
+    throw new Error("useShaderContext must be used within ShaderProvider");
+  }
+  return ctx;
 }
 
 /**
