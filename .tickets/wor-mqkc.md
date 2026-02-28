@@ -1,6 +1,6 @@
 ---
 id: wor-mqkc
-status: in_progress
+status: closed
 deps: [wor-yc6s]
 links: []
 created: 2026-02-27T02:31:11Z
