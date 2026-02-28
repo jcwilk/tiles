@@ -1,6 +1,6 @@
 ---
 id: wor-yc6s
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-27T02:30:57Z

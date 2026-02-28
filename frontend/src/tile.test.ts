@@ -3,7 +3,7 @@
  * Uses [VALID CODE] placeholder to avoid real WebGL in CI.
  */
 import { describe, it, expect, vi } from "vitest";
-import { createTile, createLoadingTile, disposeTile } from "./tile.js";
+import { createTile, disposeTile } from "./tile.js";
 import type { ShaderObject } from "./types.js";
 
 const PLACEHOLDER_SHADER: ShaderObject = {
@@ -50,16 +50,5 @@ describe("createTile", () => {
     const tile = createTile(builtInShader);
     const btn = tile.element.querySelector(".tile-delete");
     expect(btn).toBeNull();
-  });
-});
-
-describe("createLoadingTile", () => {
-  it("creates loading placeholder with spinner and label", () => {
-    const el = createLoadingTile();
-    expect(el.classList.contains("tile")).toBe(true);
-    expect(el.classList.contains("tile-loading")).toBe(true);
-    expect(el.dataset.shaderId).toBe("loading");
-    expect(el.querySelector(".tile-loading-spinner")).toBeTruthy();
-    expect(el.querySelector(".tile-label")?.textContent).toBe("Merging…");
   });
 });

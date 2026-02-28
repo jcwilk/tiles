@@ -5,7 +5,7 @@
 import "./styles.css";
 import { createIndexedDBStorage, type ShaderStorage } from "./storage.js";
 import { seedIfEmpty } from "./seed.js";
-import { createTile, createLoadingTile, disposeTile, type TileElement } from "./tile.js";
+import { createTile, disposeTile, type TileElement } from "./tile.js";
 import { getDefaultPool } from "./webgl-context-pool.js";
 import {
   observeTile,
@@ -13,9 +13,6 @@ import {
   disconnectViewportObserver,
   reconnectViewportObserver,
 } from "./viewport-observer.js";
-import { setupTileDragDrop } from "./drag-drop.js";
-import { performMerge } from "./merge.js";
-import { playMergeConnectionAnimation } from "./merge-connection-animation.js";
 import { performAddFromPrompt } from "./add-from-prompt.js";
 import { isBuiltInTile } from "./builtin.js";
 import { openEditView, closeEditView } from "./edit-view.js";
@@ -30,7 +27,6 @@ let tiles: TileElement[] = [];
 let fullscreenOverlay: HTMLElement | null = null;
 let fullscreenTile: TileElement | null = null;
 let editViewOverlay: HTMLElement | null = null;
-let teardownDragDrop: (() => void) | null = null;
 let storage: ShaderStorage | null = null;
 
 async function removeTile(tile: TileElement): Promise<void> {
@@ -48,12 +44,6 @@ async function removeTile(tile: TileElement): Promise<void> {
 
   await store.delete(tile.shader.id);
   tiles = tiles.filter((t) => t.shader.id !== tile.shader.id);
-
-  teardownDragDrop?.();
-  const remaining = Array.from(grid.querySelectorAll(".tile"));
-  teardownDragDrop = setupTileDragDrop(remaining as HTMLElement[], {
-    onMergeRequest: makeMergeHandler(tiles),
-  });
 }
 
 function handleNewShaderFromEdit(newShader: ShaderObject): void {
@@ -72,111 +62,11 @@ function handleNewShaderFromEdit(newShader: ShaderObject): void {
     grid.insertBefore(newTile.element, grid.firstElementChild);
     tiles = [newTile, ...tiles];
     observeTile(newTile);
-    teardownDragDrop?.();
-    const allEls = Array.from(grid.querySelectorAll(".tile"));
-    teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
-      onMergeRequest: makeMergeHandler(tiles),
-    });
   }
   requestAnimationFrame(() => openFullscreen(newTile));
 }
 
-function makeMergeHandler(currentTiles: TileElement[]) {
-  const store = storage;
-  return async (sourceId: string, targetId: string) => {
-    if (!store || sourceId === "loading" || targetId === "loading") return;
-      const source = currentTiles.find((t) => t.shader.id === sourceId);
-      const target = currentTiles.find((t) => t.shader.id === targetId);
-      if (!source || !target) return;
-
-      const grid = currentTiles[0]?.element.parentElement;
-      const targetEl = target.element;
-      if (!grid || !targetEl) return;
-
-      const isEdit = sourceId === targetId;
-      const loadingTile = createLoadingTile();
-      if (isEdit) {
-        targetEl.replaceWith(loadingTile);
-      } else {
-        const insertBefore = targetEl.nextElementSibling;
-        if (insertBefore) {
-          grid.insertBefore(loadingTile, insertBefore);
-        } else {
-          grid.appendChild(loadingTile);
-        }
-      }
-
-      teardownDragDrop?.();
-      const allTileEls = Array.from(grid.querySelectorAll(".tile"));
-      teardownDragDrop = setupTileDragDrop(allTileEls as HTMLElement[], {
-        onMergeRequest: makeMergeHandler(currentTiles),
-      });
-
-      // Immediate visual feedback: animate lines from source and target to merge point
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          playMergeConnectionAnimation(
-            source.element,
-            target.element,
-            loadingTile
-          );
-        });
-      });
-
-      const result = await performMerge(source.shader, target.shader, store);
-
-      if (result.success && result.shader) {
-        const newTile = createTile(result.shader, {
-          onDelete: () => removeTile(newTile),
-        });
-        newTile.element.classList.add("tile-merge-appear");
-        newTile.element.addEventListener("click", (e) => {
-          if (isDeleteOrControlClick(e)) return;
-          openFullscreen(newTile);
-        });
-        observeTile(newTile);
-
-        const targetIdx = currentTiles.findIndex((t) => t.shader.id === targetId);
-
-        if (isEdit) {
-          // Edit: replace loading with updated tile in place
-          disposeTile(target);
-          loadingTile.replaceWith(newTile.element);
-          const updatedTiles = [
-            ...currentTiles.slice(0, targetIdx),
-            newTile,
-            ...currentTiles.slice(targetIdx + 1),
-          ];
-          tiles = updatedTiles;
-        } else {
-          // Merge: remove loading, prepend new tile at start of grid (newest-first)
-          loadingTile.remove();
-          grid.insertBefore(newTile.element, grid.firstElementChild);
-          tiles = [newTile, ...currentTiles];
-        }
-
-        teardownDragDrop?.();
-        const allEls = Array.from(grid.querySelectorAll(".tile"));
-        teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
-          onMergeRequest: makeMergeHandler(tiles),
-        });
-      } else {
-        if (isEdit) {
-          loadingTile.replaceWith(targetEl);
-        } else {
-          loadingTile.remove();
-        }
-        teardownDragDrop?.();
-        const remaining = Array.from(grid.querySelectorAll(".tile"));
-        teardownDragDrop = setupTileDragDrop(remaining as HTMLElement[], {
-          onMergeRequest: makeMergeHandler(currentTiles),
-        });
-      }
-    };
-}
-
 function renderGrid(shaders: ShaderObject[]): void {
-  teardownDragDrop?.();
   disconnectViewportObserver();
 
   const grid = document.createElement("div");
@@ -200,10 +90,6 @@ function renderGrid(shaders: ShaderObject[]): void {
   app.appendChild(grid);
 
   reconnectViewportObserver(tiles);
-
-  teardownDragDrop = setupTileDragDrop(tiles.map((t) => t.element), {
-    onMergeRequest: makeMergeHandler(tiles),
-  });
 }
 
 function createAddTileButton(): HTMLElement {
@@ -247,12 +133,6 @@ function createAddTileButton(): HTMLElement {
       grid.insertBefore(newTile.element, grid.firstElementChild);
       tiles = [newTile, ...tiles];
       observeTile(newTile);
-
-      teardownDragDrop?.();
-      const allEls = Array.from(grid.querySelectorAll(".tile"));
-      teardownDragDrop = setupTileDragDrop(allEls as HTMLElement[], {
-        onMergeRequest: makeMergeHandler(tiles),
-      });
     }
   });
 
