@@ -1,6 +1,6 @@
 ---
 id: wor-kl15
-status: open
+status: closed
 deps: [wor-uuyo, wor-sriu]
 links: []
 created: 2026-02-27T02:32:22Z
