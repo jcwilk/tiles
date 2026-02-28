@@ -288,6 +288,31 @@ body {
 }
 
 /* Toast notification */
+.toast-container {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  align-items: center;
+  pointer-events: none;
+}
+
+.toast-container .toast {
+  pointer-events: auto;
+  position: relative;
+  left: auto;
+  transform: none;
+  animation: toast-enter-stack 0.2s ease-out;
+}
+
+.toast-container .toast.toast-exit {
+  animation: toast-exit-stack 0.2s ease-in forwards;
+}
+
 .toast {
   position: fixed;
   bottom: 1rem;
@@ -307,6 +332,14 @@ body {
 
 .toast-exit {
   animation: toast-exit 0.2s ease-in forwards;
+}
+
+.toast-info {
+  background: #1565c0;
+}
+
+.toast-success {
+  background: #2e7d32;
 }
 
 /* Edit view */
@@ -463,5 +496,27 @@ body {
   to {
     opacity: 0;
     transform: translateX(-50%) translateY(0.5rem);
+  }
+}
+
+@keyframes toast-enter-stack {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-exit-stack {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(0.5rem);
   }
 }
