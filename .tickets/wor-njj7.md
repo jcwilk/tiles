@@ -1,6 +1,6 @@
 ---
 id: wor-njj7
-status: open
+status: closed
 deps: [wor-bhzq, wor-kl15]
 links: []
 created: 2026-02-27T02:33:30Z

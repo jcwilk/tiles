@@ -72,7 +72,8 @@ describe("main.tsx", () => {
     await waitFor(() => {
       expect(screen.getByTestId("edit-view")).toBeInTheDocument();
     });
-    expect(screen.getByText(/Edit: test-shader-2/)).toBeInTheDocument();
+    expect(screen.getByTestId("edit-view-shader")).toBeInTheDocument();
+    expect(screen.getByTestId("suggestion-conservative")).toBeInTheDocument();
   });
 
   it("redirects to grid when shader id does not exist", async () => {
@@ -127,7 +128,7 @@ describe("main.tsx", () => {
     await waitFor(() => {
       expect(screen.getByTestId("edit-view")).toBeInTheDocument();
     });
-    expect(screen.getByText(/Edit: edit-test/)).toBeInTheDocument();
+    expect(screen.getByTestId("edit-view-shader")).toBeInTheDocument();
   });
 
   it("delete button removes shader and navigates to grid", async () => {
