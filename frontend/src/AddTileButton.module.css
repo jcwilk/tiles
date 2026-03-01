@@ -1,0 +1,64 @@
+/**
+ * AddTileButton — add new tile button in grid
+ */
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  position: relative;
+  aspect-ratio: 1;
+  background: rgba(100, 180, 255, 0.15);
+  border: 2px dashed rgba(100, 180, 255, 0.5);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  touch-action: manipulation;
+}
+
+.root:hover:not(:disabled) {
+  background: rgba(100, 180, 255, 0.25);
+  border-color: rgba(100, 180, 255, 0.8);
+}
+
+.root:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.root.recording {
+  border-color: rgba(220, 80, 80, 0.8);
+  background: rgba(220, 80, 80, 0.15);
+  animation: recordingPulse 1.5s ease-in-out infinite;
+}
+
+.root.recording .icon {
+  color: rgba(255, 100, 100, 0.95);
+}
+
+@keyframes recordingPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 80, 80, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(220, 80, 80, 0);
+  }
+}
+
+.root.loading {
+  pointer-events: none;
+}
+
+.icon {
+  font-size: 2rem;
+  font-weight: 300;
+  color: rgba(100, 180, 255, 0.9);
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(200, 220, 255, 0.9);
+}

@@ -1,6 +1,6 @@
 ---
 id: wor-uuyo
-status: open
+status: closed
 deps: [wor-bstc]
 links: []
 created: 2026-02-27T02:31:38Z

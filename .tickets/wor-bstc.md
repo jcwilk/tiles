@@ -1,6 +1,6 @@
 ---
 id: wor-bstc
-status: open
+status: closed
 deps: [wor-yc6s]
 links: []
 created: 2026-02-27T02:31:25Z

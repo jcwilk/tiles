@@ -1,10 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * E2E config for Tiles. Run with dev server + worker:
- *   npm run dev (or npm run dev -w frontend + wrangler dev -w worker)
+ * E2E config for Tiles. API is mocked at network level — worker not required.
  *   npm run test:e2e -w frontend
  *
+ * In CI, webServer starts the Vite dev server automatically.
  * If frontend uses a non-default port, set PLAYWRIGHT_BASE_URL.
  */
 export default defineConfig({
@@ -21,4 +21,12 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   timeout: 60_000,
+  webServer: process.env.CI
+    ? {
+        command: "npm run dev -w frontend",
+        url: "http://localhost:5173",
+        reuseExistingServer: true,
+        timeout: 30_000,
+      }
+    : undefined,
 });

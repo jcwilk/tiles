@@ -1,6 +1,6 @@
 ---
 id: wor-h8wo
-status: open
+status: closed
 deps: [wor-1nrd]
 links: []
 created: 2026-02-27T02:34:53Z

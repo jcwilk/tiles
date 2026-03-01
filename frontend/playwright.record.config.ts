@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Config for recording video of E2E tests.
- * Run: npx playwright test --config=playwright.record.config.ts e2e/edit.spec.ts
+ * Run: npx playwright test --config=playwright.record.config.ts e2e/app.spec.ts
  */
 export default defineConfig({
   testDir: "./e2e",

@@ -1,6 +1,6 @@
 ---
 id: wor-bhzq
-status: open
+status: closed
 deps: [wor-9s1n]
 links: []
 created: 2026-02-27T02:33:16Z

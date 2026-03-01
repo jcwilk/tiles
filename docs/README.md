@@ -2,6 +2,7 @@
 
 This directory contains domain-specific knowledge and topic-specific deep dives.
 
+- [React Migration](React-migration.md) — Epic wor-mqkc execution order and child-ticket phases.
 - [Deploy Troubleshooting](deploy-troubleshooting.md) — Cloudflare Worker deploy failure causes and fixes.
 - [GitHub Pages Setup](github-pages-setup.md) — One-time manual configuration for Pages source.
 - [Merge Test Coverage Gaps](merge-test-gaps.md) — Investigation of why merge failures in production are not caught by tests (til-s37z).

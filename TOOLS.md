@@ -34,7 +34,7 @@ Commands run from `frontend/` or `worker/` (or via `-w frontend` / `-w worker`).
 
 | Command | Purpose |
 |---------|---------|
-| `npm run test:e2e -w frontend` | Playwright E2E tests. Requires dev server and worker running. Set `PLAYWRIGHT_BASE_URL` if using non-default port. |
+| `npm run test:e2e -w frontend` | Playwright E2E tests. API mocked at network level (worker not required). Requires dev server. Set `PLAYWRIGHT_BASE_URL` if using non-default port. |
 | `npm run test:eval -w worker` | Prompt eval: validate fixtures (structural GLSL). Gated; requires `PROMPT_EVAL=1`. See [docs/README.md](docs/README.md). |
 | `npm run test:eval:record -w worker` | Re-record prompt-eval fixtures. Worker must be running. See [docs/README.md](docs/README.md). |
 

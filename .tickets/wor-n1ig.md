@@ -1,6 +1,6 @@
 ---
 id: wor-n1ig
-status: open
+status: closed
 deps: [wor-82d1]
 links: []
 created: 2026-02-27T02:32:50Z

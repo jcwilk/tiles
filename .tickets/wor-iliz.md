@@ -1,6 +1,6 @@
 ---
 id: wor-iliz
-status: open
+status: closed
 deps: [wor-njj7, wor-wzar]
 links: []
 created: 2026-02-27T02:34:10Z
