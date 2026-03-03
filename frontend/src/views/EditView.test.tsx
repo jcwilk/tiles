@@ -17,6 +17,7 @@ const MOCK_SHADER = createMockShader({
 
 const mockNavigate = vi.fn();
 const mockFetchSuggestions = vi.fn();
+const mockAbortSuggestions = vi.fn();
 const mockApplyDirective = vi.fn();
 
 vi.mock("react-router-dom", async (importOriginal) => {
@@ -59,6 +60,7 @@ describe("EditView", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     mockFetchSuggestions.mockClear();
+    mockAbortSuggestions.mockClear();
     mockApplyDirective.mockClear();
 
     vi.mocked(useShaders).mockReturnValue({
@@ -68,6 +70,7 @@ describe("EditView", () => {
 
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
+      abort: mockAbortSuggestions,
       data: {},
       isLoading: false,
       loadingByTier: { conservative: false, moderate: false, wild: false },
@@ -96,6 +99,7 @@ describe("EditView", () => {
   it("suggestion cards show loading state", () => {
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
+      abort: mockAbortSuggestions,
       data: {},
       isLoading: true,
       loadingByTier: { conservative: true, moderate: true, wild: true },
@@ -117,6 +121,7 @@ describe("EditView", () => {
   it("suggestion cards populate with AI results", () => {
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
+      abort: mockAbortSuggestions,
       data: {
         conservative: "Add a glow",
         moderate: "Make it pulse",
@@ -137,6 +142,7 @@ describe("EditView", () => {
   it("clicking suggestion applies directive", () => {
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
+      abort: mockAbortSuggestions,
       data: { conservative: "Add a glow" },
       isLoading: false,
       loadingByTier: { conservative: false, moderate: false, wild: false },
@@ -202,6 +208,7 @@ describe("EditView", () => {
     });
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
+      abort: mockAbortSuggestions,
       data: { conservative: "Combine" },
       isLoading: false,
       loadingByTier: { conservative: false, moderate: false, wild: false },
@@ -245,6 +252,7 @@ describe("EditView", () => {
     });
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
+      abort: mockAbortSuggestions,
       data: { conservative: "Add glow" },
       isLoading: false,
       loadingByTier: { conservative: false, moderate: false, wild: false },
@@ -286,5 +294,12 @@ describe("EditView", () => {
     renderEditView("test-shader");
 
     expect(mockFetchSuggestions).toHaveBeenCalledWith("[VALID CODE]");
+  });
+
+  it("aborts suggestion requests on unmount", () => {
+    const view = renderEditView("test-shader");
+    view.unmount();
+
+    expect(mockAbortSuggestions).toHaveBeenCalled();
   });
 });

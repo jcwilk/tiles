@@ -18,7 +18,8 @@ export interface GenerateError {
 
 export async function generateFromPrompt(
   prompt: string,
-  previousError?: string
+  previousError?: string,
+  signal?: AbortSignal
 ): Promise<GenerateResponse> {
   const url = `${getApiUrl()}/generate-from-prompt`;
   const body: Record<string, string> = { prompt };
@@ -30,6 +31,7 @@ export async function generateFromPrompt(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
 
   const data = (await res.json()) as GenerateResponse | GenerateError;
@@ -55,13 +57,15 @@ export interface SuggestResponse {
 
 export async function fetchSuggestion(
   fragmentSource: string,
-  adventurousness: Adventurousness
+  adventurousness: Adventurousness,
+  signal?: AbortSignal
 ): Promise<SuggestResponse> {
   const url = `${getApiUrl()}/suggest`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fragmentSource, adventurousness }),
+    signal,
   });
 
   const data = (await res.json()) as SuggestResponse | GenerateError;
@@ -83,7 +87,8 @@ export async function applyDirective(
   fragmentSource: string,
   directive: string,
   contextShaders?: string[],
-  previousError?: string
+  previousError?: string,
+  signal?: AbortSignal
 ): Promise<GenerateResponse> {
   const url = `${getApiUrl()}/apply-directive`;
   const body: {
@@ -106,6 +111,7 @@ export async function applyDirective(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
 
   const data = (await res.json()) as GenerateResponse | GenerateError;

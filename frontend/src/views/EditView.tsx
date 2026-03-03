@@ -21,7 +21,12 @@ export interface EditViewProps {
 export function EditView({ shaderId }: EditViewProps): ReactElement {
   const navigate = useNavigate();
   const { shaders, loading } = useShaders();
-  const { execute: fetchSuggestions, data: suggestionsData, loadingByTier } = useFetchSuggestions();
+  const {
+    execute: fetchSuggestions,
+    abort: abortSuggestions,
+    data: suggestionsData,
+    loadingByTier,
+  } = useFetchSuggestions();
   const { execute: applyDirective, data: appliedShader, isLoading: isApplying } = useApplyDirective();
 
   const [selectedContextIds, setSelectedContextIds] = useState<Set<string>>(new Set());
@@ -31,8 +36,12 @@ export function EditView({ shaderId }: EditViewProps): ReactElement {
   useEffect(() => {
     if (shader?.fragmentSource) {
       void fetchSuggestions(shader.fragmentSource);
+      return () => {
+        abortSuggestions();
+      };
     }
-  }, [shader?.fragmentSource, fetchSuggestions]);
+    return undefined;
+  }, [shader?.fragmentSource, fetchSuggestions, abortSuggestions]);
 
   useEffect(() => {
     if (appliedShader) {
