@@ -70,6 +70,37 @@ describe("ToastProvider and useToast", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Hello toast");
   });
 
+  it("does not re-render toast consumers when toasts change", () => {
+    const onRender = vi.fn();
+
+    function RenderCountConsumer(): ReactElement {
+      onRender();
+      const { showToast } = useToast();
+      return (
+        <button
+          type="button"
+          onClick={() => showToast("Memoized value toast", { duration: 1000 })}
+          data-testid="show-memoized-toast"
+        >
+          Show memoized
+        </button>
+      );
+    }
+
+    render(
+      <ToastProvider>
+        <RenderCountConsumer />
+      </ToastProvider>
+    );
+
+    expect(onRender).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("show-memoized-toast"));
+
+    expect(screen.getByText("Memoized value toast")).toBeInTheDocument();
+    expect(onRender).toHaveBeenCalledTimes(1);
+  });
+
   it("stacks multiple toasts", () => {
     render(
       <ToastProvider>

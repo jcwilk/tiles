@@ -1,6 +1,6 @@
 ---
 id: wor-fryj
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-03-01T03:18:07Z
