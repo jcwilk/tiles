@@ -1,6 +1,6 @@
 ---
 id: wor-yjcs
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-03-01T03:16:51Z
