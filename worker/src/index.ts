@@ -78,10 +78,6 @@ export default {
       return handleUsage(env, corsHeaders);
     }
 
-    if (url.pathname === "/generate" && request.method === "POST") {
-      return handleGenerate(request, env, corsHeaders);
-    }
-
     if (url.pathname === "/generate-from-prompt" && request.method === "POST") {
       return handleGenerateFromPrompt(request, env, corsHeaders);
     }
@@ -438,7 +434,8 @@ Required format:
   }
 }
 
-function buildApplyDirectiveUserMessage(
+/** Exported for prompt eval hash computation (staleness detection). */
+export function buildApplyDirectiveUserMessage(
   fragmentSource: string,
   directive: string,
   contextShaders: string[],
@@ -508,129 +505,6 @@ async function handleUsage(env: Env, corsHeaders: Record<string, string>): Promi
     200,
     corsHeaders
   );
-}
-
-interface GenerateBody {
-  fragmentA: string;
-  fragmentB: string;
-  /** Optional: compiler error from previous attempt for retry context */
-  previousError?: string;
-}
-
-async function handleGenerate(
-  request: Request,
-  env: Env,
-  corsHeaders: Record<string, string>
-): Promise<Response> {
-  const origin = request.headers.get("Origin") ?? "";
-  if (!isOriginAllowed(origin, env)) {
-    return jsonResponse({ error: "Forbidden: origin not allowed" }, 403, corsHeaders);
-  }
-
-  let body: GenerateBody;
-  try {
-    body = (await request.json()) as GenerateBody;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
-  }
-
-  const { fragmentA, fragmentB, previousError } = body;
-  if (typeof fragmentA !== "string" || typeof fragmentB !== "string") {
-    return jsonResponse(
-      { error: "Missing or invalid fragmentA/fragmentB (must be strings)" },
-      400,
-      corsHeaders
-    );
-  }
-
-  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const limits = await getLimits(env);
-
-  const rateLimitResult = await checkRateLimits(env.RATE_LIMIT_KV, ip, limits);
-  if (!rateLimitResult.allowed) {
-    return jsonResponse(
-      {
-        error: "Rate limit exceeded",
-        retryAfter: rateLimitResult.retryAfter,
-      },
-      429,
-      { ...corsHeaders, ...(rateLimitResult.retryAfter ? { "Retry-After": String(rateLimitResult.retryAfter) } : {}) }
-    );
-  }
-
-  const prompt = buildMergePrompt(fragmentA, fragmentB, typeof previousError === "string" ? previousError : undefined);
-
-  try {
-    const response = await env.AI.run(TEXT_MODEL, {
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert GLSL shader programmer. You combine fragment shaders into new, creative WebGL shaders.
-
-CRITICAL: Output raw GLSL fragment shader code ONLY. No markdown, no code fences, no explanations.
-Required format:
-- First line: #version 300 es
-- Second line: precision highp float;
-- Required API: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
-- End with your main() and fragColor assignment.`,
-        },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: models.text.maxTokens,
-    });
-
-    const result = response as { response?: string; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
-    const generated = typeof result.response === "string" ? result.response : String(result?.response ?? "");
-    const usage = result.usage;
-    const tokensUsed = usage?.total_tokens ?? estimateTokens(prompt + generated);
-
-    await incrementRateLimits(env.RATE_LIMIT_KV, ip, tokensUsed);
-
-    const fragmentSource = sanitizeGLSL(generated);
-
-    return jsonResponse(
-      {
-        fragmentSource,
-        tokensUsed,
-      },
-      200,
-      corsHeaders
-    );
-  } catch (err) {
-    console.error("AI run error:", err);
-    return jsonResponse(
-      { error: "AI generation failed", details: err instanceof Error ? err.message : "Unknown error" },
-      502,
-      corsHeaders
-    );
-  }
-}
-
-/** Exported for prompt eval hash computation (staleness detection) */
-export function buildMergePrompt(fragmentA: string, fragmentB: string, previousError?: string): string {
-  let base = `Merge these two GLSL fragment shaders into one new shader that creatively combines their visual effects.
-
-Output raw GLSL only. Start with:
-#version 300 es
-precision highp float;
-
-Use: uniform float u_time; uniform vec2 u_resolution; uniform vec2 u_touch; in vec2 v_uv; out vec4 fragColor;
-
-Shader A:
-\`\`\`glsl
-${fragmentA}
-\`\`\`
-
-Shader B:
-\`\`\`glsl
-${fragmentB}
-\`\`\`
-`;
-  if (previousError) {
-    base += `\nThe previous attempt failed to compile. Fix the error and output corrected GLSL (raw code only, no markdown):\n${previousError}\n\n`;
-  }
-  base += `Output the merged fragment shader (raw GLSL, no \`\`\` fences):`;
-  return base;
 }
 
 /** Test placeholders (CONVENTIONS.md) - pass through unchanged */

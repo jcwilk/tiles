@@ -1,6 +1,6 @@
 ---
 id: wor-5nhd
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-03-01T03:17:59Z

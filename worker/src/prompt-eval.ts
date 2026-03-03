@@ -3,11 +3,14 @@
  * Used by prompt-eval tests; not part of npm test.
  */
 import { createHash } from "node:crypto";
-import { buildMergePrompt } from "./index.js";
+import { buildApplyDirectiveUserMessage } from "./index.js";
 
-/** Prompt template fingerprint; changes when buildMergePrompt changes */
+export const PROMPT_EVAL_DIRECTIVE =
+  "Blend the MAIN SHADER with visual ideas from the REFERENCE SHADER while preserving valid WebGL GLSL output.";
+
+/** Prompt template fingerprint; changes when apply-directive prompt template changes */
 const PROMPT_TEMPLATE_FINGERPRINT = (() => {
-  const base = buildMergePrompt("", "", undefined);
+  const base = buildApplyDirectiveUserMessage("", PROMPT_EVAL_DIRECTIVE, [""], undefined);
   return createHash("sha256").update(base).digest("hex").slice(0, 16);
 })();
 
