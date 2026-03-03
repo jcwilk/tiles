@@ -1,6 +1,6 @@
 ---
 id: wor-9srk
-status: open
+status: closed
 deps: [wor-8dsq]
 links: []
 created: 2026-03-03T07:08:28Z

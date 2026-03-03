@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tiles</title>
+  </head>
+  <body>
+    <script>
+      (function () {
+        var REDIRECT_KEY = "tiles:spa-redirect-path";
+        var TOP_LEVEL_ROUTES = { tile: true };
+        var pathname = window.location.pathname;
+        var segments = pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+        var basePath = "/";
+
+        if (segments.length > 1 && TOP_LEVEL_ROUTES[segments[1]]) {
+          basePath = "/" + segments[0] + "/";
+        } else if (segments.length > 0 && TOP_LEVEL_ROUTES[segments[0]]) {
+          basePath = "/";
+        }
+
+        try {
+          window.sessionStorage.setItem(
+            REDIRECT_KEY,
+            pathname + window.location.search + window.location.hash
+          );
+        } catch (_error) {
+          // Ignore storage errors and still attempt root redirect.
+        }
+
+        window.location.replace(window.location.origin + basePath);
+      })();
+    </script>
+    <noscript>Redirecting to Tiles...</noscript>
+  </body>
+</html>
