@@ -1,6 +1,6 @@
 ---
 id: wor-df2s
-status: open
+status: closed
 deps: [wor-qgow]
 links: []
 created: 2026-03-01T03:17:50Z

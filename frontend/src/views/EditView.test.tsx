@@ -2,10 +2,10 @@
  * EditView component tests.
  * Verifies rendering, suggestion loading, directive submission, context shader picker.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { EditView } from "./EditView.jsx";
+import { EditView, __resetSuggestionCacheForTests } from "./EditView.jsx";
 import type { ShaderObject } from "../types.js";
 import { createMockShader } from "../test-utils.js";
 
@@ -58,6 +58,7 @@ function renderEditView(shaderId: string) {
 
 describe("EditView", () => {
   beforeEach(() => {
+    __resetSuggestionCacheForTests();
     mockNavigate.mockClear();
     mockFetchSuggestions.mockClear();
     mockAbortSuggestions.mockClear();
@@ -85,6 +86,10 @@ describe("EditView", () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders shader preview and suggestion cards", () => {
     renderEditView("test-shader");
 
@@ -97,6 +102,7 @@ describe("EditView", () => {
   });
 
   it("suggestion cards show loading state", () => {
+    vi.useFakeTimers();
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
       abort: mockAbortSuggestions,
@@ -107,6 +113,9 @@ describe("EditView", () => {
     });
 
     renderEditView("test-shader");
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
 
     const cards = [
       screen.getByTestId("suggestion-conservative"),
@@ -119,6 +128,7 @@ describe("EditView", () => {
   });
 
   it("suggestion cards populate with AI results", () => {
+    vi.useFakeTimers();
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
       abort: mockAbortSuggestions,
@@ -133,6 +143,9 @@ describe("EditView", () => {
     });
 
     renderEditView("test-shader");
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
 
     expect(screen.getByTestId("suggestion-conservative")).toHaveTextContent("Add a glow");
     expect(screen.getByTestId("suggestion-moderate")).toHaveTextContent("Make it pulse");
@@ -140,6 +153,7 @@ describe("EditView", () => {
   });
 
   it("clicking suggestion applies directive", () => {
+    vi.useFakeTimers();
     vi.mocked(useFetchSuggestions).mockReturnValue({
       execute: mockFetchSuggestions,
       abort: mockAbortSuggestions,
@@ -150,6 +164,9 @@ describe("EditView", () => {
     });
 
     renderEditView("test-shader");
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
     fireEvent.click(screen.getByTestId("suggestion-conservative"));
 
     expect(mockApplyDirective).toHaveBeenCalledWith(
@@ -197,6 +214,7 @@ describe("EditView", () => {
   });
 
   it("passes selected context shaders to applyDirective", () => {
+    vi.useFakeTimers();
     const otherShader: ShaderObject = {
       ...MOCK_SHADER,
       id: "context-shader",
@@ -216,6 +234,9 @@ describe("EditView", () => {
     });
 
     renderEditView("test-shader");
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
 
     const checkbox = screen.getByRole("checkbox", { hidden: true });
     fireEvent.click(checkbox);
@@ -290,10 +311,62 @@ describe("EditView", () => {
     expect(screen.getByText("Tile not found")).toBeInTheDocument();
   });
 
-  it("calls fetchSuggestions on mount with shader fragment source", () => {
+  it("debounces fetchSuggestions on mount", () => {
+    vi.useFakeTimers();
     renderEditView("test-shader");
 
+    expect(mockFetchSuggestions).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(399);
+    });
+    expect(mockFetchSuggestions).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
     expect(mockFetchSuggestions).toHaveBeenCalledWith("[VALID CODE]");
+  });
+
+  it("uses cached suggestions for the same fragment source on revisit", () => {
+    vi.useFakeTimers();
+    vi.mocked(useFetchSuggestions).mockReturnValue({
+      execute: mockFetchSuggestions,
+      abort: mockAbortSuggestions,
+      data: {
+        conservative: "Add a glow",
+        moderate: "Make it pulse",
+        wild: "Add rainbow waves",
+      },
+      isLoading: false,
+      loadingByTier: { conservative: false, moderate: false, wild: false },
+      error: undefined,
+    });
+
+    const firstView = renderEditView("test-shader");
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(screen.getByTestId("suggestion-conservative")).toHaveTextContent("Add a glow");
+    firstView.unmount();
+
+    mockFetchSuggestions.mockClear();
+    vi.mocked(useFetchSuggestions).mockReturnValue({
+      execute: mockFetchSuggestions,
+      abort: mockAbortSuggestions,
+      data: {},
+      isLoading: false,
+      loadingByTier: { conservative: false, moderate: false, wild: false },
+      error: undefined,
+    });
+
+    renderEditView("test-shader");
+
+    expect(screen.getByTestId("suggestion-conservative")).toHaveTextContent("Add a glow");
+    expect(screen.getByTestId("suggestion-moderate")).toHaveTextContent("Make it pulse");
+    expect(screen.getByTestId("suggestion-wild")).toHaveTextContent("Add rainbow waves");
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(mockFetchSuggestions).not.toHaveBeenCalled();
   });
 
   it("aborts suggestion requests on unmount", () => {
