@@ -7,6 +7,7 @@ import type { AiModels } from "@cloudflare/workers-types";
 import models from "../models.json";
 
 const TEXT_MODEL = models.text.id as keyof AiModels;
+const DEFAULT_AI_TIMEOUT_MS = 30_000;
 
 /** Allowed origins: GitHub Pages (*.github.io) and localhost for dev */
 const ALLOWED_ORIGIN_PATTERNS = [
@@ -37,6 +38,7 @@ export interface Env {
   IP_PER_HOUR?: string;
   GLOBAL_PER_HOUR?: string;
   GLOBAL_PER_DAY?: string;
+  AI_TIMEOUT_MS?: string;
 }
 
 /** Get limits with fallback: KV config:limits -> env vars -> defaults. Exported for tests. */
@@ -57,6 +59,58 @@ export async function getLimits(env: Env): Promise<Limits> {
     };
   } catch {
     return fromEnv;
+  }
+}
+
+class AiTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`AI request timed out after ${timeoutMs}ms`);
+    this.name = "AiTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+function getAiTimeoutMs(env: Env): number {
+  const parsed = Number.parseInt(env.AI_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AI_TIMEOUT_MS;
+}
+
+function isAiTimeoutError(error: unknown): error is AiTimeoutError {
+  return error instanceof AiTimeoutError;
+}
+
+async function runAiWithTimeout(env: Env, input: Record<string, unknown>): Promise<unknown> {
+  const timeoutMs = getAiTimeoutMs(env);
+  const timeoutError = new AiTimeoutError(timeoutMs);
+  const controller = new AbortController();
+  let timeoutReached = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      timeoutReached = true;
+      controller.abort(timeoutError);
+      reject(timeoutError);
+    }, timeoutMs);
+  });
+
+  const aiInput = { ...input, signal: controller.signal } as unknown as Parameters<Ai["run"]>[1];
+  const aiPromise = Promise.resolve()
+    .then(() => env.AI.run(TEXT_MODEL, aiInput))
+    .catch((error: unknown) => {
+      if (timeoutReached) {
+        throw timeoutError;
+      }
+      throw error;
+    });
+
+  try {
+    return await Promise.race([aiPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -156,7 +210,7 @@ async function handleGenerateFromPrompt(
   const userPrompt = buildGenerateFromPromptUserMessage(prompt.trim(), previousError);
 
   try {
-    const response = await env.AI.run(TEXT_MODEL, {
+    const response = await runAiWithTimeout(env, {
       messages: [
         {
           role: "system",
@@ -195,6 +249,16 @@ Required format:
       corsHeaders
     );
   } catch (err) {
+    if (isAiTimeoutError(err)) {
+      return jsonResponse(
+        {
+          error: "AI request timed out",
+          details: err.message,
+        },
+        504,
+        corsHeaders
+      );
+    }
     console.error("AI run error:", err);
     return jsonResponse(
       {
@@ -287,7 +351,7 @@ async function handleSuggest(
   const temperature = ADVENTUROUSNESS_TEMPERATURE[adventurousness] ?? 0.2;
 
   try {
-    const response = await env.AI.run(TEXT_MODEL, {
+    const response = await runAiWithTimeout(env, {
       messages: [
         {
           role: "system",
@@ -310,6 +374,16 @@ async function handleSuggest(
 
     return jsonResponse({ suggestion }, 200, corsHeaders);
   } catch (err) {
+    if (isAiTimeoutError(err)) {
+      return jsonResponse(
+        {
+          error: "AI request timed out",
+          details: err.message,
+        },
+        504,
+        corsHeaders
+      );
+    }
     console.error("AI suggest error:", err);
     return jsonResponse(
       {
@@ -384,7 +458,7 @@ async function handleApplyDirective(
   );
 
   try {
-    const response = await env.AI.run(TEXT_MODEL, {
+    const response = await runAiWithTimeout(env, {
       messages: [
         {
           role: "system",
@@ -422,6 +496,16 @@ Required format:
       corsHeaders
     );
   } catch (err) {
+    if (isAiTimeoutError(err)) {
+      return jsonResponse(
+        {
+          error: "AI request timed out",
+          details: err.message,
+        },
+        504,
+        corsHeaders
+      );
+    }
     console.error("AI apply-directive error:", err);
     return jsonResponse(
       {

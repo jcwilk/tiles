@@ -46,6 +46,12 @@ function createMockAI(response: string, tokens = 100): Ai {
   } as unknown as Ai;
 }
 
+function createNeverResolvingAI(): Ai {
+  return {
+    run: vi.fn(() => new Promise(() => {})),
+  } as unknown as Ai;
+}
+
 function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     AI: createMockAI("[VALID CODE]"),
@@ -211,6 +217,27 @@ describe("worker", () => {
         })
       );
     });
+
+    it("returns 504 when AI generation times out", async () => {
+      const env = createEnv({
+        AI: createNeverResolvingAI(),
+        AI_TIMEOUT_MS: "5",
+      });
+      const req = new Request("http://localhost/generate-from-prompt", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({ prompt: "slow generation" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(504);
+      const body = (await res.json()) as { error: string; details: string };
+      expect(body.error).toBe("AI request timed out");
+      expect(body.details).toContain("5ms");
+    });
   });
 
   describe("POST /suggest", () => {
@@ -352,6 +379,30 @@ describe("worker", () => {
       expect(body.error).toContain("Rate limit exceeded");
       expect(body.retryAfter).toBeDefined();
       expect(env.AI.run).not.toHaveBeenCalled();
+    });
+
+    it("returns 504 when suggestion AI call times out", async () => {
+      const env = createEnv({
+        AI: createNeverResolvingAI(),
+        AI_TIMEOUT_MS: "5",
+      });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(504);
+      const body = (await res.json()) as { error: string; details: string };
+      expect(body.error).toBe("AI request timed out");
+      expect(body.details).toContain("5ms");
     });
   });
 
@@ -510,6 +561,30 @@ describe("worker", () => {
       expect(body.error).toContain("Rate limit exceeded");
       expect(body.retryAfter).toBeDefined();
       expect(env.AI.run).not.toHaveBeenCalled();
+    });
+
+    it("returns 504 when apply-directive AI call times out", async () => {
+      const env = createEnv({
+        AI: createNeverResolvingAI(),
+        AI_TIMEOUT_MS: "5",
+      });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          directive: "make it slower",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(504);
+      const body = (await res.json()) as { error: string; details: string };
+      expect(body.error).toBe("AI request timed out");
+      expect(body.details).toContain("5ms");
     });
   });
 
