@@ -1,8 +1,8 @@
 ---
 id: wor-1nqe
-status: open
+status: closed
 deps: []
-links: []
+links: [wor-xpcp]
 created: 2026-03-01T03:17:02Z
 type: task
 priority: 0
@@ -18,3 +18,8 @@ The ~27M GB-seconds ($70/month) charge is almost certainly NOT from the Tiles Wo
 
 Root cause of GB-seconds billing identified. If it's an unneeded resource, it is deleted or a follow-up ticket is created to remove it.
 
+## Notes
+
+**2026-03-03T07:23:29Z**
+
+Summary: Active Cloudflare container `moltbot-sandbox-sandbox` (`a035bacb-7f7c-4dc5-9aad-8495aed97323`) with one active instance, 12 GiB memory, and linked durable object namespace `dd386472f4a74b63948e82f5fe07708a` is the likely GB-seconds source. `wrangler queues list` returned empty; `wrangler d1 list` was blocked by API token scope (`10000`). Follow-up ticket `wor-xpcp` created for remediation.
