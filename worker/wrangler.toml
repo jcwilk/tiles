@@ -10,9 +10,10 @@ compatibility_flags = ["nodejs_compat"]
 [ai]
 binding = "AI"
 
-# Cron trigger for threshold-based email alerts (every 15 minutes)
-[triggers]
-crons = ["*/15 * * * *"]
+# Cron trigger intentionally disabled to avoid no-op scheduled invocations
+# when ALERT_EMAIL is not configured. Re-enable when email alerting is needed:
+# [triggers]
+# crons = ["*/15 * * * *"]
 
 # KV namespace for 3-tier token rate limiting (IP/hour, global/hour, global/day)
 # Production: npx wrangler kv:namespace create RATE_LIMIT_KV
