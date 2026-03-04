@@ -46,6 +46,12 @@ function createMockAI(response: string, tokens = 100): Ai {
   } as unknown as Ai;
 }
 
+function createNeverResolvingAI(): Ai {
+  return {
+    run: vi.fn(() => new Promise(() => {})),
+  } as unknown as Ai;
+}
+
 function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     AI: createMockAI("[VALID CODE]"),
@@ -138,139 +144,6 @@ describe("worker", () => {
     });
   });
 
-  describe("POST /generate", () => {
-    it("rejects request without allowed origin", async () => {
-      const env = createEnv();
-      const req = new Request("http://localhost/generate", {
-        method: "POST",
-        headers: { Origin: "https://evil.com", "Content-Type": "application/json" },
-        body: JSON.stringify({ fragmentA: "void main(){}", fragmentB: "void main(){}" }),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(403);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toContain("origin not allowed");
-    });
-
-    it("rejects invalid JSON body", async () => {
-      const env = createEnv();
-      const req = new Request("http://localhost/generate", {
-        method: "POST",
-        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
-        body: "not json",
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toContain("Invalid JSON");
-    });
-
-    it("rejects missing fragmentA or fragmentB", async () => {
-      const env = createEnv();
-      const req = new Request("http://localhost/generate", {
-        method: "POST",
-        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
-        body: JSON.stringify({ fragmentA: "x" }),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toContain("fragmentA/fragmentB");
-    });
-
-    it("returns generated shader for valid request with allowed origin", async () => {
-      const mockAI = createMockAI("[VALID CODE]");
-      const env = createEnv({ AI: mockAI });
-      const req = new Request("http://localhost/generate", {
-        method: "POST",
-        headers: {
-          Origin: "https://user.github.io",
-          "Content-Type": "application/json",
-          "CF-Connecting-IP": "1.2.3.4",
-        },
-        body: JSON.stringify({
-          fragmentA: "void main(){ fragColor=vec4(1,0,0,1); }",
-          fragmentB: "void main(){ fragColor=vec4(0,1,0,1); }",
-        }),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { fragmentSource: string; tokensUsed: number };
-      expect(body.fragmentSource).toBe("[VALID CODE]");
-      expect(typeof body.tokensUsed).toBe("number");
-      expect(env.AI.run).toHaveBeenCalled();
-    });
-
-    it("returns [INVALID CODE] when mock AI is configured for invalid output", async () => {
-      const mockAI = createMockAI("[INVALID CODE]");
-      const env = createEnv({ AI: mockAI });
-      const req = new Request("http://localhost/generate", {
-        method: "POST",
-        headers: {
-          Origin: "https://user.github.io",
-          "Content-Type": "application/json",
-          "CF-Connecting-IP": "1.2.3.4",
-        },
-        body: JSON.stringify({
-          fragmentA: "void main(){}",
-          fragmentB: "void main(){}",
-        }),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { fragmentSource: string };
-      expect(body.fragmentSource).toBe("[INVALID CODE]");
-    });
-
-    it("accepts optional previousError for retry context", async () => {
-      const mockAI = createMockAI("[VALID CODE]");
-      const env = createEnv({ AI: mockAI });
-      const req = new Request("http://localhost/generate", {
-        method: "POST",
-        headers: {
-          Origin: "https://user.github.io",
-          "Content-Type": "application/json",
-          "CF-Connecting-IP": "1.2.3.4",
-        },
-        body: JSON.stringify({
-          fragmentA: "void main(){}",
-          fragmentB: "void main(){}",
-          previousError: "Fragment: syntax error at line 5",
-        }),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { fragmentSource: string };
-      expect(body.fragmentSource).toBe("[VALID CODE]");
-      expect(env.AI.run).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          messages: expect.arrayContaining([
-            expect.objectContaining({
-              role: "user",
-              content: expect.stringContaining("syntax error at line 5"),
-            }),
-          ]),
-        })
-      );
-    });
-
-    it("honors ALLOWED_ORIGINS env override", async () => {
-      const env = createEnv({ ALLOWED_ORIGINS: "https://custom.example.com" });
-      const req = new Request("http://localhost/generate", {
-        method: "POST",
-        headers: {
-          Origin: "https://custom.example.com",
-          "Content-Type": "application/json",
-          "CF-Connecting-IP": "1.2.3.4",
-        },
-        body: JSON.stringify({ fragmentA: "x", fragmentB: "y" }),
-      });
-      const res = await worker.fetch(req, env, {} as ExecutionContext);
-      expect(res.status).toBe(200);
-    });
-  });
-
   describe("POST /generate-from-prompt", () => {
     it("rejects request without allowed origin", async () => {
       const env = createEnv();
@@ -343,6 +216,27 @@ describe("worker", () => {
           ]),
         })
       );
+    });
+
+    it("returns 504 when AI generation times out", async () => {
+      const env = createEnv({
+        AI: createNeverResolvingAI(),
+        AI_TIMEOUT_MS: "5",
+      });
+      const req = new Request("http://localhost/generate-from-prompt", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({ prompt: "slow generation" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(504);
+      const body = (await res.json()) as { error: string; details: string };
+      expect(body.error).toBe("AI request timed out");
+      expect(body.details).toContain("5ms");
     });
   });
 
@@ -485,6 +379,30 @@ describe("worker", () => {
       expect(body.error).toContain("Rate limit exceeded");
       expect(body.retryAfter).toBeDefined();
       expect(env.AI.run).not.toHaveBeenCalled();
+    });
+
+    it("returns 504 when suggestion AI call times out", async () => {
+      const env = createEnv({
+        AI: createNeverResolvingAI(),
+        AI_TIMEOUT_MS: "5",
+      });
+      const req = new Request("http://localhost/suggest", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){}",
+          adventurousness: "moderate",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(504);
+      const body = (await res.json()) as { error: string; details: string };
+      expect(body.error).toBe("AI request timed out");
+      expect(body.details).toContain("5ms");
     });
   });
 
@@ -644,9 +562,47 @@ describe("worker", () => {
       expect(body.retryAfter).toBeDefined();
       expect(env.AI.run).not.toHaveBeenCalled();
     });
+
+    it("returns 504 when apply-directive AI call times out", async () => {
+      const env = createEnv({
+        AI: createNeverResolvingAI(),
+        AI_TIMEOUT_MS: "5",
+      });
+      const req = new Request("http://localhost/apply-directive", {
+        method: "POST",
+        headers: {
+          Origin: "https://user.github.io",
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "1.2.3.4",
+        },
+        body: JSON.stringify({
+          fragmentSource: "void main(){ fragColor=vec4(1); }",
+          directive: "make it slower",
+        }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(504);
+      const body = (await res.json()) as { error: string; details: string };
+      expect(body.error).toBe("AI request timed out");
+      expect(body.details).toContain("5ms");
+    });
   });
 
   describe("404", () => {
+    it("returns 404 for removed /generate endpoint", async () => {
+      const env = createEnv();
+      const req = new Request("http://localhost/generate", {
+        method: "POST",
+        headers: { Origin: "https://user.github.io", "Content-Type": "application/json" },
+        body: JSON.stringify({ fragmentA: "x", fragmentB: "y" }),
+      });
+      const res = await worker.fetch(req, env, {} as ExecutionContext);
+      expect(res.status).toBe(404);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("Not Found");
+      expect(env.AI.run).not.toHaveBeenCalled();
+    });
+
     it("returns 404 for unknown path", async () => {
       const env = createEnv();
       const req = new Request("http://localhost/unknown");

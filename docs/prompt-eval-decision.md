@@ -2,13 +2,15 @@
 
 **Ticket**: til-hxs3  
 **Date**: 2026-02-23  
-**Status**: Decision documented; approach chosen for implementation (til-442l).
+**Status**: Decision documented; approach chosen for implementation (til-442l). Updated by wor-5nhd: dead `POST /generate` endpoint removed; prompt eval now records against `POST /apply-directive`.
 
 ---
 
 ## Summary
 
 Research evaluated **promptfoo** (open-source eval framework), a **custom Vitest approach**, and **fixture staleness detection patterns**. The decision is to **roll a lightweight custom Vitest-based prompt eval** with fixture recording, staleness detection, and a structural GLSL validator.
+
+> Note (2026-03-03): Historical references to `buildMergePrompt` and `/generate` in this document reflect the original design context. The live implementation now uses the apply-directive flow for prompt eval coverage.
 
 ---
 
@@ -114,4 +116,4 @@ Reasons:
 
 ---
 
-*Last Updated: 2026-02-23*
+*Last Updated: 2026-03-03*

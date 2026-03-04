@@ -6,7 +6,7 @@ import { describe, it } from "vitest";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { computeInputHash } from "./prompt-eval.js";
+import { computeInputHash, PROMPT_EVAL_DIRECTIVE } from "./prompt-eval.js";
 import { validateGLSLStructure } from "./validateGLSL.js";
 import { sanitizeGLSL } from "./index.js";
 
@@ -187,13 +187,17 @@ describe("prompt-eval", () => {
       const currentHash = computeInputHash(fragmentA, fragmentB, null);
 
       if (RECORD_MODE) {
-        const res = await fetch(`${API_URL}/generate`, {
+        const res = await fetch(`${API_URL}/apply-directive`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Origin: "http://localhost:5173",
           },
-          body: JSON.stringify({ fragmentA, fragmentB }),
+          body: JSON.stringify({
+            fragmentSource: fragmentA,
+            directive: PROMPT_EVAL_DIRECTIVE,
+            contextShaders: [fragmentB],
+          }),
         });
         if (!res.ok) {
           throw new Error(

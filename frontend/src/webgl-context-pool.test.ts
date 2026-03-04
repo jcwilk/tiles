@@ -1,7 +1,7 @@
 /**
  * Tests for WebGLContextPool: acquire, release, priority eviction, mobile fallback.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   WebGLContextPool,
   getDefaultPool,
@@ -28,6 +28,54 @@ describe("WebGLContextPool", () => {
     const pool = new WebGLContextPool({ maxContexts: 8 });
     const canvas = createCanvas();
     expect(() => pool.release(canvas)).not.toThrow();
+  });
+
+  it("release does not lose context while canvas is connected", () => {
+    const pool = new WebGLContextPool({ maxContexts: 8 });
+    const canvas = createCanvas();
+    const loseContext = vi.fn();
+    const mockGl = {
+      getExtension: vi.fn(() => ({ loseContext })),
+    } as unknown as WebGL2RenderingContext;
+
+    Object.defineProperty(canvas, "getContext", {
+      value: vi.fn(() => mockGl),
+      configurable: true,
+    });
+    Object.defineProperty(canvas, "isConnected", {
+      value: true,
+      configurable: true,
+    });
+
+    pool.acquire(canvas);
+    pool.release(canvas);
+
+    expect(loseContext).not.toHaveBeenCalled();
+    expect(pool.activeCount).toBe(0);
+  });
+
+  it("release loses context once canvas is disconnected", () => {
+    const pool = new WebGLContextPool({ maxContexts: 8 });
+    const canvas = createCanvas();
+    const loseContext = vi.fn();
+    const mockGl = {
+      getExtension: vi.fn(() => ({ loseContext })),
+    } as unknown as WebGL2RenderingContext;
+
+    Object.defineProperty(canvas, "getContext", {
+      value: vi.fn(() => mockGl),
+      configurable: true,
+    });
+    Object.defineProperty(canvas, "isConnected", {
+      value: false,
+      configurable: true,
+    });
+
+    pool.acquire(canvas);
+    pool.release(canvas);
+
+    expect(loseContext).toHaveBeenCalledTimes(1);
+    expect(pool.activeCount).toBe(0);
   });
 
   it("respects maxContexts option", () => {

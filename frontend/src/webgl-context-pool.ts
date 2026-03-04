@@ -84,12 +84,17 @@ export class WebGLContextPool {
   }
 
   /**
-   * Release the context for the canvas (loseContext and free slot).
+   * Release pool tracking for canvas and free slot.
+   * Context loss is triggered only when canvas is disconnected.
    */
   release(canvas: HTMLCanvasElement): void {
-    loseContext(canvas);
     const idx = this.entries.findIndex((e) => e.canvas === canvas);
     if (idx >= 0) this.entries.splice(idx, 1);
+    // React StrictMode re-runs effects in dev; cleanup may run while canvas is still mounted.
+    // Avoid forcibly losing context in that case so immediate re-acquire can still compile.
+    if (!canvas.isConnected) {
+      loseContext(canvas);
+    }
   }
 
   /**

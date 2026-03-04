@@ -8,6 +8,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -58,7 +59,10 @@ export function ShaderProvider({
 }: ShaderProviderProps): ReactNode {
   const [shaders, setShaders] = useState<ShaderObject[]>([]);
   const [loading, setLoading] = useState(true);
-  const storage = storageProp ?? createIndexedDBStorage();
+  const storage = useMemo(
+    () => storageProp ?? createIndexedDBStorage(),
+    [storageProp]
+  );
 
   const refresh = useCallback(async () => {
     if (!storage) return;

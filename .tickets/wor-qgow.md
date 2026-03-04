@@ -1,6 +1,6 @@
 ---
 id: wor-qgow
-status: open
+status: closed
 deps: [wor-1nqe]
 links: []
 created: 2026-03-01T03:17:25Z

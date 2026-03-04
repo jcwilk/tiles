@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -98,7 +99,10 @@ export function ToastProvider({
     [defaultDuration]
   );
 
-  const value: ToastContextValue = { showToast, dismissToast };
+  const value = useMemo<ToastContextValue>(
+    () => ({ showToast, dismissToast }),
+    [showToast, dismissToast]
+  );
 
   return (
     <ToastContext.Provider value={value}>

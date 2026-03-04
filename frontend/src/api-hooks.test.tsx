@@ -128,6 +128,34 @@ describe("useGenerateFromPrompt", () => {
 
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
+
+  it("passes AbortSignal and aborts in-flight request on unmount", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedSignal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        capturedSignal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true }
+        );
+      });
+    }) as typeof fetch;
+    const wrapper = createWrapperForHook();
+
+    const { result, unmount } = renderHook(() => useGenerateFromPrompt(), { wrapper });
+
+    act(() => {
+      void result.current.execute("blue gradient");
+    });
+
+    await waitFor(() => {
+      expect(capturedSignal).toBeDefined();
+    });
+
+    unmount();
+    expect(capturedSignal?.aborted).toBe(true);
+  });
 });
 
 describe("useFetchSuggestions", () => {
@@ -138,10 +166,13 @@ describe("useFetchSuggestions", () => {
   });
 
   it("fires 3 parallel requests and returns results by tier", async () => {
-    const calls: { body: { adventurousness: string } }[] = [];
+    const calls: {
+      body: { adventurousness: string };
+      signal?: AbortSignal;
+    }[] = [];
     globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse((init?.body as string) ?? "{}");
-      calls.push({ body });
+      calls.push({ body, signal: init?.signal as AbortSignal | undefined });
       return Promise.resolve({
         ok: true,
         json: () =>
@@ -160,6 +191,8 @@ describe("useFetchSuggestions", () => {
     expect(calls).toHaveLength(3);
     const tiers = calls.map((c) => c.body.adventurousness).sort();
     expect(tiers).toEqual(["conservative", "moderate", "wild"]);
+    expect(calls.every((c) => c.signal instanceof AbortSignal)).toBe(true);
+    expect(new Set(calls.map((c) => c.signal)).size).toBe(1);
     expect(result.current.data.conservative).toBe("suggestion-conservative");
     expect(result.current.data.moderate).toBe("suggestion-moderate");
     expect(result.current.data.wild).toBe("suggestion-wild");
@@ -218,6 +251,48 @@ describe("useFetchSuggestions", () => {
       },
       { timeout: 100 }
     );
+  });
+
+  it("aborts in-flight suggestion requests without setting error", async () => {
+    const signals = new Set<AbortSignal>();
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal;
+      signals.add(signal);
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true }
+        );
+      });
+    }) as typeof fetch;
+
+    const wrapper = createWrapperForHook({ needsShader: false });
+    const { result } = renderHook(() => useFetchSuggestions(), { wrapper });
+
+    act(() => {
+      void result.current.execute("void main(){}");
+    });
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    act(() => {
+      result.current.abort();
+    });
+
+    expect(signals.size).toBe(1);
+    for (const signal of signals) {
+      expect(signal.aborted).toBe(true);
+    }
+
+    await waitFor(() => {
+      expect(result.current.loadingByTier.conservative).toBe(false);
+      expect(result.current.loadingByTier.moderate).toBe(false);
+      expect(result.current.loadingByTier.wild).toBe(false);
+    });
+    expect(result.current.error).toBeUndefined();
   });
 });
 
@@ -325,5 +400,33 @@ describe("useApplyDirective", () => {
     });
 
     expect(result.current.data).toBeDefined();
+  });
+
+  it("passes AbortSignal and aborts in-flight request on unmount", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedSignal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        capturedSignal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true }
+        );
+      });
+    }) as typeof fetch;
+    const wrapper = createWrapperForHook();
+
+    const { result, unmount } = renderHook(() => useApplyDirective(), { wrapper });
+
+    act(() => {
+      void result.current.execute(MOCK_SHADER, "add glow");
+    });
+
+    await waitFor(() => {
+      expect(capturedSignal).toBeDefined();
+    });
+
+    unmount();
+    expect(capturedSignal?.aborted).toBe(true);
   });
 });
